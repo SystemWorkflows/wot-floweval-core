@@ -9,62 +9,62 @@ class ThingDescriptionCollection:
             if "actions" not in td:
                 continue
 
-            for k, v in td["actions"].items():
-                if k == actionName:
-                    return v["input"]
-                
+            for actName, actValue in td["actions"].items():
+                if actName == actionName:
+                    return actValue["input"]
+
     def getEventData(self, eventName):
-        for i in self.tds:
-            if "events" not in i:
+        for td in self.tds:
+            if "events" not in td:
                 continue
 
-            for k, v in i["events"].items():
-                if k != eventName:
+            for evtName, evtValue in td["events"].items():
+                if evtName != eventName:
                     continue
 
-                if "description" in v["data"]:
-                    del v["data"]["description"]
+                if "description" in evtValue["data"]:
+                    del evtValue["data"]["description"]
 
-                if "unit" in v["data"]:
-                    del v["data"]["unit"]
+                if "unit" in evtValue["data"]:
+                    del evtValue["data"]["unit"]
 
-                if "enum" in v["data"]:
-                    del v["data"]["enum"]
+                if "enum" in evtValue["data"]:
+                    del evtValue["data"]["enum"]
 
-                if "properties" not in v["data"]:
-                    return v["data"]
-                
-                for j in v["data"]["properties"].values():
-                    if "description" in j:
-                        del j["description"]
+                if "properties" not in evtValue["data"]:
+                    return evtValue["data"]
 
-                    if "unit" in j:
-                        del j["unit"]
+                for property in evtValue["data"]["properties"].values():
+                    if "description" in property:
+                        del property["description"]
 
-                    if "enum" in j:
-                        del j["enum"]
-                
-                return v["data"]
-                
+                    if "unit" in property:
+                        del property["unit"]
+
+                    if "enum" in property:
+                        del property["enum"]
+
+                return evtValue["data"]
+
     def getActionOutput(self, actionName):
         for td in self.tds:
             if "actions" not in td:
                 continue
 
-            for k, v in td["actions"].items():
-                if k != actionName:
-                    continue
-                
-                if "output" not in v:
+            for actName, actValue in td["actions"].items():
+                if actName != actionName:
                     continue
 
-                if "description" in v["output"]:
-                    del v["output"]["description"]
+                if "output" not in actValue:
+                    continue
 
-                if "enum" in v["output"]:
-                    del v["output"]["enum"]
-                    
-                return v["output"]
+                if "description" in actValue["output"]:
+                    del actValue["output"]["description"]
+
+                if "enum" in actValue["output"]:
+                    del actValue["output"]["enum"]
+
+                return actValue["output"]
         return None
     
     def getPropertyValue(self, propertyName):
@@ -72,15 +72,15 @@ class ThingDescriptionCollection:
             if "properties" not in td:
                 continue
 
-            for k, v in td["properties"].items():
-                if k != propertyName:
+            for propName, propValue in td["properties"].items():
+                if propName != propertyName:
                     continue
 
-                a = {}
-                a["type"] = v["type"]
+                propertyReturn = {}
+                propertyReturn["type"] = propValue["type"]
 
-                if "properties" in v:
-                    a["properties"] = v["properties"]
-                
-                return a
+                if "properties" in propValue:
+                    propertyReturn["properties"] = propValue["properties"]
+
+                return propertyReturn
         return None

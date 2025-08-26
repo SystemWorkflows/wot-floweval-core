@@ -35,26 +35,26 @@ class Node:
         self.children.append(child)
 
     def addChildren(self):
-        for wire in flatten(self.node["wires"]):
+        for nodeID in flatten(self.node["wires"]):
             state, conditions, interactions = copy.deepcopy((self.state, self.conditions, self.interactions))
-            receiverType = self.flow[wire]["type"]
+            receiverType = self.flow[nodeID]["type"]
 
-            child = NodeFactory.produceNode(receiverType, (self.flow[wire], self.flow, self.tds, state, conditions, interactions))
+            child = NodeFactory.produceNode(receiverType, (self.flow[nodeID], self.flow, self.tds, state, conditions, interactions))
 
             self.addChild(child)
             self.errors = self.errors | child.getErrors()
 
     def getChildren(self):
         """
-        todo: currently causing crash - fix
+
         """
-        #print(self.node["type"])
-        c = copy.deepcopy(self.children)
+
+        children = copy.deepcopy(self.children)
 
         for i in self.children:
-            c += i.getChildren()
+            children += i.getChildren()
 
-        return c
+        return children
 
     def getErrors(self):
         return self.errors
@@ -336,13 +336,13 @@ class SystemActionNode(InteractionNode):
             return True
         
         incProp = {}
-        for k, v in payload["properties"].items():
-            incProp[k] = v["type"]
-        
+        for propertyName, propertyValue in payload["properties"].items():
+            incProp[propertyName] = propertyValue["type"]
+
         actInProp = {}
-        for k,v in actionInput["properties"].items():
-            actInProp[k] = v["type"]
-        
+        for propertyName, propertyValue in actionInput["properties"].items():
+            actInProp[propertyName] = propertyValue["type"]
+
         if sorted(incProp) != sorted(actInProp):
             self.errors[self.node["id"]].append("expected: " + json.dumps(actionInput) + " got: " + json.dumps(payload))
             return False
@@ -374,8 +374,8 @@ class SystemActionNode(InteractionNode):
         if output["type"] != "object":
             output["source"] = source
         else:
-            for k, v in output["properties"].items():
-                v["source"] = source
+            for property in output["properties"].values():
+                property["source"] = source
 
         self.state["payload"] = output
 
@@ -547,17 +547,17 @@ class SystemEventNode(Node):
         if self.state["payload"]["type"] != "object":
             self.state["payload"]["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
         
-        for i in self.state["payload"]["properties"].values():
-            i["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
+        for property in self.state["payload"]["properties"].values():
+            property["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
 
     def match(self, subflow_matches):
         children = self.getChildren()
         matches = {}
 
-        for i in children:
-            if i.node["type"] == "system-action-node" or (i.node["type"] == "system-property-node" and i.node["mode"] == "write"):
-                matches[i.node["id"]] = i.match(subflow_matches)
-        
+        for child in children:
+            if child.node["type"] == "system-action-node" or (child.node["type"] == "system-property-node" and child.node["mode"] == "write"):
+                matches[child.node["id"]] = child.match(subflow_matches)
+
         left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
 
         return {"matches": matches, "left_over": left_over}
@@ -592,8 +592,8 @@ class SystemPropertyNode(InteractionNode):
         if output["type"] != "object":
             output["source"] = source
         else:
-            for k, v in output["properties"].items():
-                v["source"] = source
+            for property in output["properties"].values():
+                property["source"] = source
 
         self.state["payload"] = output
 
@@ -610,9 +610,9 @@ class SystemPropertyNode(InteractionNode):
         if (payload["type"] != "object") and ("source" in payload):
             del payload["source"]
         else:
-            for k, v in payload["properties"].items():
-                if "source" in v:
-                    del v["source"]
+            for property in payload["properties"].values():
+                if "source" in property:
+                    del property["source"]
 
         if sorted(payload) == sorted(propertyInput):
             return True

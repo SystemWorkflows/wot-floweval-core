@@ -45,14 +45,10 @@ class Node:
             self.errors = self.errors | child.getErrors()
 
     def getChildren(self):
-        """
-
-        """
-
         children = copy.deepcopy(self.children)
 
-        for i in self.children:
-            children += i.getChildren()
+        for child in self.children:
+            children += child.getChildren()
 
         return children
 
@@ -65,8 +61,8 @@ class Node:
     def extractConditions(self):
         conditions = []
 
-        for i in self.children:
-            conditions += i.extractConditions()
+        for child in self.children:
+            conditions += child.extractConditions()
 
         return conditions
 
@@ -109,6 +105,20 @@ class ChangeNode(SecondaryNode):
                 self.errors[self.node["id"]].append("Error in change node state lookup: " + str(e))
                 raise e
 
+        def set_state(typ, state_target, state_name, lookupTarget, source):
+            if typ == "lookUp":
+                state_target[state_name] = stateLookup(lookupTarget)
+            elif typ == int:
+                state_target[state_name] = {"type": "integer", "source": source}
+            elif typ == float:
+                state_target[state_name] = {"type": "number", "source": source}
+            elif typ == str:
+                state_target[state_name] = {"type": "string", "source": source}
+            elif typ == bool:
+                state_target[state_name] = {"type": "boolean", "source": source}
+            elif typ == 'typeError':
+                state_target[state_name] = {"type": "string", "source": source}
+
         for rule in self.node["rules"]:
             source = {"type": "change", "id": self.node["id"]}
 
@@ -116,9 +126,9 @@ class ChangeNode(SecondaryNode):
                 if rule["tot"] == "jsonata":
                     if rule["to"][0] == "{": # jsonata
                         x = rule["to"][1:-1]
-                        y = x.replace(" ", "")
-
-                        parts = y.split(',"')
+                        x = x.replace(" ", "")
+                        x = x.replace('","', '",a"')
+                        parts = x.split(',"')
                         if len(parts) > 1:
                             for x in range(1,len(parts)):
                                 parts[x] = '"' + parts[x]
@@ -127,37 +137,12 @@ class ChangeNode(SecondaryNode):
                         for part in parts:
                             part = part.split(":", 1)
                             typ = self.__check_type(part[1])
-
-                            if typ == "lookUp":
-                                output[part[0][1:-1]] = stateLookup(part[1])
-                            elif typ == int:
-                                output[part[0][1:-1]] = {"type": "integer", "source": source}
-                            elif typ == float:
-                                output[part[0][1:-1]] = {"type": "number", "source": source}
-                            elif typ == str:
-                                output[part[0][1:-1]] = {"type": "string", "source": source}
-                            elif typ == bool:
-                                output[part[0][1:-1]] = {"type": "boolean", "source": source}
-                            elif typ == 'typeError':
-                                output[part[0][1:-1]] = {"type": "string", "source": source}
-                                
+                            set_state(typ, output, part[0][1:-1], part[1], source)
                         self.state[rule["p"]] = {"type": "object"}
                         self.state[rule["p"]]["properties"] = output
                     else:
                         typ = self.__check_type(rule["to"])
-
-                        if typ == "lookUp":
-                            self.state[rule["p"]] = stateLookup(rule["to"])
-                        elif typ == int:
-                            self.state[rule["p"]] = {"type": "integer", "source": source}
-                        elif typ == float:
-                            self.state[rule["p"]] = {"type": "number", "source": source}
-                        elif typ == str:
-                            self.state[rule["p"]] = {"type": "string", "source": source}
-                        elif typ == bool:
-                            self.state[rule["p"]] = {"type": "boolean", "source": source}
-                        elif typ == 'typeError':
-                            self.state[rule["p"]] = {"type": "string", "source": source}
+                        set_state(typ, self.state, rule["p"], rule["to"], source)
 
                 elif rule["tot"] == "msg": # Check this
                     lu = stateLookup(rule["to"])
@@ -186,16 +171,10 @@ class ChangeNode(SecondaryNode):
                     self.state[rule["p"]] = {"type": "object"}
 
                     for k, v in json.loads(rule["to"]).items():
-                        typ = self._self.__check_type(v)
-
-                        if typ == int:
-                            properties[k] = {"type": "integer", "source": source}
-                        elif typ == float:
-                            properties[k] = {"type": "number", "source": source}
-                        elif typ == str:
-                            properties[k] = {"type": "string", "source": source}
-                        elif typ == bool:
-                            properties[k] = {"type": "boolean", "source": source}   
+                        typ = self.__check_type(v)
+                        if typ == 'lookUp' or typ == 'typeError':
+                            raise Exception("Invalid type in json rule")
+                        set_state(typ, properties, k, None, source)
 
                     self.state[rule["p"]]["properties"] = properties
             except Exception as e:
@@ -225,6 +204,187 @@ class InteractionNode(SecondaryNode):
 
     def validatePayload(self):
         pass
+
+    def _validatePayload(self, expectedInput):
+        payload = copy.deepcopy(self.incomingState["payload"])
+
+        if payload == {} and expectedInput == {}:
+            return True
+
+        if (payload == {} and expectedInput != {}) or (payload != {} and expectedInput == {}):
+            return False
+        
+        if payload["type"] != "object":
+            if payload["type"] != expectedInput["type"]:
+                self.errors[self.node["id"]].append("expected: " + json.dumps(expectedInput) + " got: " + json.dumps(payload))
+                return False
+
+            return True
+        
+        incProp = {}
+        for propertyName, propertyValue in payload["properties"].items():
+            if "type" in propertyValue:
+                incProp[propertyName] = propertyValue["type"]
+            else:
+                incProp[propertyName] = None
+
+        actInProp = {}
+        for propertyName, propertyValue in expectedInput["properties"].items():
+            if "type" in propertyValue:
+                actInProp[propertyName] = propertyValue["type"]
+            else:
+                actInProp[propertyName] = None
+
+        if sorted(incProp) != sorted(actInProp):
+            self.errors[self.node["id"]].append("expected: " + json.dumps(expectedInput) + " got: " + json.dumps(payload))
+            return False
+
+        return True
+
+    def conditionsMatch(self, conditions):
+        for condition in conditions:
+            if ("property" not in condition) or ("source" not in condition["property"]):
+                    continue
+
+            if "id" in condition["property"]["source"]:
+                del condition["property"]["source"]["id"] # Remove id from source
+
+            if "prev" in condition["property"]["source"]:
+                del condition["property"]["source"]["prev"] # Remove prev from source
+
+        for condition in self.conditions:
+            if ("property" not in condition) or ("source" not in condition["property"]):
+                continue
+
+            if "id" in condition["property"]["source"]:
+                del condition["property"]["source"]["id"] # Remove id from source
+            
+            if "prev" in condition["property"]["source"]:
+                del condition["property"]["source"]["prev"] # Remove prev from source
+
+        if conditions == self.conditions:
+            return True
+        
+
+    def preConditionsMatch(self, pre_nodes):
+        if pre_nodes == []:
+            return True
+        
+        prev = []
+        for i in self.previousInteractions: # Add filtering to exclude irrelevant interactions when selecting which interactions to check
+            if i.node["type"] == "system-action-node":
+                prev.append(i.node["thingAction"])
+            if (i.node["type"] == "system-property-node") and (i.node["mode"] == "write"):
+                prev.append(i.node["thingProperty"])
+
+        if pre_nodes != prev:
+            return False
+        
+        return True
+    
+    def inputMatch(self, input):
+        if not self.validatePayload():
+            return False
+        
+        if (input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
+            if "source" not in input:
+                return True
+            
+            i_source = input["source"]
+            p_source = self.incomingState["payload"]["source"]
+            
+            if i_source["type"] != p_source["type"]:
+                return False
+            
+            if i_source["type"] == "event":
+                return True
+            
+            if "name" not in i_source:
+                return True
+            
+            if i_source["name"] != p_source["name"]:
+                return False
+            
+            if "pos" not in i_source:
+                return True
+            
+            if i_source["pos"]["location"] == "last":
+                node = i_source["pos"]["node"]
+                x = self.previousInteractions[len(p_source["prev"]) + 1:]
+                return node not in x
+
+            if i_source["pos"]["location"] == "after":
+                node = i_source["pos"]["node"]
+                return node in p_source["prev"]
+            
+        elif (input["type"] == "object") and (self.incomingState["payload"]["type"] == "object"):
+            for k, v in input["properties"].items():
+                if k not in self.incomingState["payload"]["properties"]:
+                    return False
+                
+                if "source" not in v:
+                    return True
+                
+                i_source = v["source"]
+                p_source = self.incomingState["payload"]["properties"][k]["source"]
+
+                if i_source["type"] != p_source["type"]: # Does this need a closing else?
+                    continue
+                
+                if i_source["type"] == "event":
+                    return True
+                
+                if "name" not in i_source:
+                    return True
+                
+                if i_source["name"] != p_source["name"]:
+                    return True
+                
+                if "pos" not in i_source:
+                    return True
+                
+                if i_source["pos"] != "last": # Finish this
+                    return False
+                
+                for interacts in reversed(self.previousInteractions):
+                    name = None
+
+                    if interacts.node["type"] == "system-action-node":
+                        name = interacts.node["thingAction"]
+
+                    if  interacts.node["type"] == "system-property-node":
+                        name = interacts.node["thingProperty"]
+
+                    if name != input["name"]:
+                        continue
+                    
+                    if p_source["id"] == interacts.node["id"]:
+                        return True
+        
+        return False
+
+    def match(self, candidates, subflow_matches):
+        match = {"preConditionMatch": False, "conditionsMatch": False, "inputMatch": False}
+        candidates = [cand for cand in candidates if self.preConditionsMatch(cand[1]["pre_nodes"])]
+
+        if candidates != []:
+            match["preConditionMatch"] = True
+            candidates = [cand for cand in candidates if self.conditionsMatch(cand[1]["conditions"])]
+
+            if candidates != []:
+                match["conditionsMatch"] = True
+                candidates = [cand for cand in candidates if self.inputMatch(cand[1]["input"])]
+
+                if candidates != []:
+                    match["inputMatch"] = True
+
+        for candidate in candidates: # Should be no more than one candidate but just in case checks list, this check prevents multiple nodes matching against the same case.
+            subflow_matches.remove(candidate)
+
+        status = match["preConditionMatch"] and match["conditionsMatch"] and match["inputMatch"]
+
+        return {"status": status, "name": self.node["thingAction"], "match": match, "candidates": candidates} # Needs reversing to check flow validity
+
 
 class PassThroughNode(SecondaryNode):
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
@@ -321,33 +481,9 @@ class SystemActionNode(InteractionNode):
 
         return conditions
 
-    def validatePayload(self):
-        if self.incomingState["payload"] == {}:
-            return False
-        
-        actionInput = self.tds.getActionInput(self.node["thingAction"])
-        payload = copy.deepcopy(self.incomingState["payload"])
-
-        if payload["type"] != "object":
-            if payload["type"] != actionInput["type"]:
-                self.errors[self.node["id"]].append("expected: " + json.dumps(actionInput) + " got: " + json.dumps(payload))
-                return False
-
-            return True
-        
-        incProp = {}
-        for propertyName, propertyValue in payload["properties"].items():
-            incProp[propertyName] = propertyValue["type"]
-
-        actInProp = {}
-        for propertyName, propertyValue in actionInput["properties"].items():
-            actInProp[propertyName] = propertyValue["type"]
-
-        if sorted(incProp) != sorted(actInProp):
-            self.errors[self.node["id"]].append("expected: " + json.dumps(actionInput) + " got: " + json.dumps(payload))
-            return False
-
-        return True
+    def validatePayload(self):  
+        expectedInput = self.tds.getActionInput(self.node["thingAction"])
+        return super()._validatePayload(expectedInput)
 
             
     
@@ -379,158 +515,14 @@ class SystemActionNode(InteractionNode):
 
         self.state["payload"] = output
 
-    def conditionsMatch(self, conditions):
-        for condition in conditions:
-            if ("property" not in condition) or ("source" not in condition["property"]):
-                 continue
-
-            if "id" in condition["property"]["source"]:
-                del condition["property"]["source"]["id"] # Remove id from source
-
-            if "prev" in condition["property"]["source"]:
-                del condition["property"]["source"]["prev"] # Remove prev from source
-
-        for condition in self.conditions:
-            if ("property" not in condition) or ("source" not in condition["property"]):
-                continue
-
-            if "id" in condition["property"]["source"]:
-                del condition["property"]["source"]["id"] # Remove id from source
-            
-            if "prev" in condition["property"]["source"]:
-                del condition["property"]["source"]["prev"] # Remove prev from source
-
-        if conditions == self.conditions:
-            return True
-
-    def inputMatch(self, input):
-        if not self.validatePayload():
-            return False
-        
-        if (input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
-            if "source" not in input:
-                return True
-            
-            i_source = input["source"]
-            p_source = self.incomingState["payload"]["source"]
-            
-            if i_source["type"] != p_source["type"]:
-                return False
-            
-            if i_source["type"] == "event":
-                return True
-            
-            if "name" not in i_source:
-                return True
-            
-            if i_source["name"] != p_source["name"]:
-                return False
-            
-            if "pos" not in i_source:
-                return True
-            
-            if i_source["pos"]["location"] == "last":
-                node = i_source["pos"]["node"]
-                x = self.previousInteractions[len(p_source["prev"]) + 1:]
-                return node not in x
-
-            if i_source["pos"]["location"] == "after":
-                node = i_source["pos"]["node"]
-                return node in p_source["prev"]
-            
-        elif (input["type"] == "object") and (self.incomingState["payload"]["type"] == "object"):
-            for k, v in input["properties"].items():
-                if k not in self.incomingState["payload"]["properties"]:
-                    return False
-                
-                if "source" not in v:
-                    return True
-                
-                i_source = v["source"]
-                p_source = self.incomingState["payload"]["properties"][k]["source"]
-
-                if i_source["type"] != p_source["type"]: # Does this need a closing else?
-                    continue
-                
-                if i_source["type"] == "event":
-                    return True
-                
-                if "name" not in i_source:
-                    return True
-                
-                if i_source["name"] != p_source["name"]:
-                    return True
-                
-                if "pos" not in i_source:
-                    return True
-                
-                if i_source["pos"] != "last": # Finish this
-                    return False
-                
-                for interacts in reversed(self.previousInteractions):
-                    name = None
-
-                    if interacts.node["type"] == "system-action-node":
-                        name = interacts.node["thingAction"]
-
-                    if  interacts.node["type"] == "system-property-node":
-                        name = interacts.node["thingProperty"]
-
-                    if name != input["name"]:
-                        continue
-                    
-                    if p_source["id"] == interacts.node["id"]:
-                        return True
-        
-        return False
-
-
-    def preConditionsMatch(self, pre_nodes):
-        if pre_nodes == []:
-            return True
-        
-        prev = []
-        for i in self.previousInteractions: # Add filtering to exclude irrelevant interactions when selecting which interactions to check
-            if i.node["type"] == "system-action-node":
-                prev.append(i.node["thingAction"])
-            if (i.node["type"] == "system-property-node") and (i.node["mode"] == "write"):
-                prev.append(i.node["thingProperty"])
-
-        if pre_nodes != prev:
-            return False
-        
-        return True
     
     def match(self, subflow_matches):
-        # print node details for match types
-        print("subflow matches: ", subflow_matches)
-        
         candidates = []
-        for i in subflow_matches:
-            if i[0] == self.node["thingAction"]:
-                candidates.append(i)
-        
-        match = {"preConditionMatch": False, "conditionsMatch": False, "inputMatch": False}
-        candidates = [x for x in candidates if self.preConditionsMatch(x[1]["pre_nodes"])]
+        for subflow_match in subflow_matches:
+            if subflow_match[0] == self.node["thingAction"]:
+                candidates.append(subflow_match)
 
-        if candidates != []:
-            match["preConditionMatch"] = True
-            candidates = [x for x in candidates if self.conditionsMatch(x[1]["conditions"])]
-
-            if candidates != []:
-                match["conditionsMatch"] = True
-                candidates = [x for x in candidates if self.inputMatch(x[1]["input"])]
-
-                if candidates != []:
-                    match["inputMatch"] = True
-
-        for i in candidates: # Should be no more than one candidate but just in case checks list, this check prevents multiple nodes matching against the same case.
-            subflow_matches.remove(i)
-
-        status = match["preConditionMatch"] and match["conditionsMatch"] and match["inputMatch"]
-
-        print("final Candidates: " + json.dumps(candidates))
-        return {"status": status, "name": self.node["thingAction"], "match": match, "candidates": candidates} # Needs reversing to check flow validity
+        return super().match(candidates, subflow_matches)
 
 class SystemEventNode(Node):
     def __init__(self, node, flow, tds):
@@ -562,11 +554,6 @@ class SystemEventNode(Node):
 
         return {"matches": matches, "left_over": left_over}
 
-    # def extractConditions(self):
-    #     conditions = []
-    #     for i in self.getChildren():
-    #         conditions += i.extractConditions()
-    #     return conditions
 
 class SystemPropertyNode(InteractionNode):
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
@@ -600,161 +587,17 @@ class SystemPropertyNode(InteractionNode):
     def validatePayload(self):
         if self.node["mode"] != "write":
             return True
-        
-        if self.state["payload"] == {}:
-            return False
-
-        propertyInput = self.tds.getPropertyValue(self.node["thingProperty"])
-        payload = self.state["payload"]
-
-        if (payload["type"] != "object") and ("source" in payload):
-            del payload["source"]
-        else:
-            for property in payload["properties"].values():
-                if "source" in property:
-                    del property["source"]
-
-        if sorted(payload) == sorted(propertyInput):
-            return True
-        
-        self.errors[self.node["id"]].append("expected: " + json.dumps(propertyInput) + " got: " + json.dumps(payload))
-        return False
     
-    def conditionsMatch(self, conditions):
-        if conditions == self.conditions:
-            return True
+        propertyInput = self.tds.getPropertyValue(self.node["thingProperty"])
+        return super()._validatePayload(propertyInput)
 
-    def inputMatch(self, input):
-        if not self.validatePayload():
-            return False
-        
-        if (input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
-            if "source" not in input:
-                return True
-            
-            i_source = input["source"]
-            p_source = self.incomingState["payload"]["source"]
 
-            if i_source["type"] != p_source["type"]: # Does this need a closing else?
-                return False
-                
-            if i_source["type"] == "event":
-                return True
-            
-            if "name" not in i_source:
-                return True
-            
-            if i_source["name"] != p_source["name"]:
-                return True
-            
-            if "pos" not in i_source:
-                return True
-            
-            if i_source["pos"] == "last": # Finish this
-                return False
-            
-            for interaction in reversed(self.previousInteractions):
-                name = None
-
-                if interaction.node["type"] == "system-action-node":
-                    name = interaction.node["thingAction"]
-
-                if interaction.node["type"] == "system-property-node":
-                    name = interaction.node["thingProperty"]
-
-                if name != input["name"]:
-                    continue
-                
-                if p_source["id"] == interaction.node["id"]:
-                    return True
-                
-                return False
-                
-        elif (input["type"] == "object") and (self.incomingState["payload"]["type"] == "object"):
-            for k, v in input["properties"].items():
-                if k not in self.incomingState["payload"]["properties"]:
-                    return False
-                
-                if "source" in v:
-                    return True
-                
-                i_source = v["source"]
-                p_source = self.incomingState["payload"]["properties"][k]["source"]
-
-                if i_source["type"] != p_source["type"]:
-                    continue
-                
-                if i_source["type"] == "event":
-                    return True
-                    
-                if "name"  not in i_source:
-                    return True
-                
-                if i_source["name"] != p_source["name"]:
-                    return True
-                
-                if "pos" not in i_source:
-                    return True
-                
-                if i_source["pos"] != "last": # Finish this
-                    return False
-                
-                lastInteraction = self.previousInteractions[-1]
-                name = None
-                
-                if lastInteraction.node["type"] == "system-action-node":
-                    name = lastInteraction.node["thingAction"]
-
-                if lastInteraction.node["type"] == "system-property-node":
-                    name = lastInteraction.node["thingProperty"]
-
-                if name == input["name"]:        
-                    return True
-                
-                return False
-        
-        return False
-
-    def preConditionsMatch(self, pre_nodes):
-        if pre_nodes == []:
-            return True
-        
-        prev = []
-
-        for interaction in self.previousInteractions:
-            if (interaction.node["type"] == "system-action-node") and (interaction.node["thingAction"] in pre_nodes):
-                prev.append(interaction.node["thingAction"])
-            if (interaction.node["type"] == "system-property-node") and (interaction.node["mode"] == "write") and (interaction.node["thingProperty"] in pre_nodes):
-                prev.append(interaction.node["thingProperty"])
-
-        if pre_nodes != prev:
-            return False
-        
-        return True
 
     def match(self, subflow_matches):
         candidates = []
 
-        for i in subflow_matches:
-            if i[0] == self.node["thingProperty"]:
-                candidates.append(i)
-        
-        match = {"preConditionMatch": False, "conditionsMatch": False, "inputMatch": False}
-        candidates = [x for x in candidates if self.preConditionsMatch(x[1]["pre_nodes"])]
+        for subflow_match in subflow_matches:
+            if subflow_match[0] == self.node["thingProperty"]:
+                candidates.append(subflow_match)
 
-        if candidates != []:
-            match["preConditionMatch"] = True
-            candidates = [x for x in candidates if self.conditionsMatch(x[1]["conditions"])]
-            
-            if candidates != []:
-                match["conditionsMatch"] = True
-                candidates = [x for x in candidates if self.inputMatch(x[1]["input"])]
-
-                if candidates != []:
-                    match["inputMatch"] = True
-
-        for candidate in candidates: # Should be no more than one candidate but just in case checks list, this check prevents multiple nodes matching against the same case.
-            subflow_matches.remove(candidate)
-
-        status = match["preConditionMatch"] and match["conditionsMatch"] and match["inputMatch"]
-        return {"status": status, "match": match, "candidates": candidates}
+        return super().match(candidates, subflow_matches)

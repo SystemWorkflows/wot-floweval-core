@@ -5,6 +5,7 @@ import copy
 import traceback
 from typing import Any, Tuple
 from src.helpers import flatten
+import re
 
 class NodeFactory:
     @staticmethod
@@ -105,6 +106,26 @@ class ChangeNode(SecondaryNode):
                 self.errors[self.node["id"]].append("Error in change node state lookup: " + str(e))
                 raise e
 
+        def objectHandler(object):
+            x = object[1:-1]
+            x = x.replace(" ", "")
+            regex = r'({[^{}]*})|("[^"]*")|,'
+            parts = []
+            last_index = 0
+            for match in re.finditer(regex, x):
+                if match.group(0) == ',':
+                    parts.append(x[last_index:match.start()].strip())
+                    last_index = match.end()
+                # Add the last part of the string
+            parts.append(x[last_index:].strip())
+
+            output = {}
+            for part in parts:
+                part = part.split(":", 1)
+                typ = self.__check_type(part[1])
+                set_state(typ, output, part[0][1:-1], part[1], source)
+            return {"type": "object", "properties": output}
+
         def set_state(typ, state_target, state_name, lookupTarget, source):
             if typ == "lookUp":
                 state_target[state_name] = stateLookup(lookupTarget)
@@ -118,70 +139,99 @@ class ChangeNode(SecondaryNode):
                 state_target[state_name] = {"type": "boolean", "source": source}
             elif typ == 'typeError':
                 state_target[state_name] = {"type": "string", "source": source}
+            elif typ == "object":
+                state_target[state_name] = objectHandler(lookupTarget)
+            else:
+                raise Exception("jsonata data could not be handled")
 
         for rule in self.node["rules"]:
             source = {"type": "change", "id": self.node["id"]}
 
             try:
-                if rule["tot"] == "jsonata":
-                    if rule["to"][0] == "{": # jsonata
-                        x = rule["to"][1:-1]
-                        x = x.replace(" ", "")
-                        x = x.replace('","', '",a"')
-                        parts = x.split(',"')
-                        if len(parts) > 1:
-                            for x in range(1,len(parts)):
-                                parts[x] = '"' + parts[x]
-                        
-                        output = {}
-                        for part in parts:
-                            part = part.split(":", 1)
-                            typ = self.__check_type(part[1])
-                            set_state(typ, output, part[0][1:-1], part[1], source)
+                if rule["t"] == "set":
+                    if rule["tot"] == "jsonata":
+                        if rule["to"][0] == "{": # jsonata
+                            x = rule["to"][1:-1]
+                            x = x.replace(" ", "")
+                            # x = x.replace('&","', '&",a"')
+                            # parts = x.split(',"')
+                            # if len(parts) > 1:
+                            #     for x in range(1,len(parts)):
+                            #         parts[x] = '"' + parts[x]
+                            regex = r'({[^{}]*})|("[^"]*")|,'
+
+                            parts = []
+                            last_index = 0
+                            for match in re.finditer(regex, x):
+                                if match.group(0) == ',':
+                                    parts.append(x[last_index:match.start()].strip())
+                                    last_index = match.end()
+
+                             # Add the last part of the string
+                            parts.append(x[last_index:].strip())
+
+                            output = {}
+                            for part in parts:
+                                part = part.split(":", 1)
+                                typ = self.__check_type(part[1])
+                                set_state(typ, output, part[0][1:-1], part[1], source)
+                            self.state[rule["p"]] = {"type": "object"}
+                            self.state[rule["p"]]["properties"] = output
+                        else:
+                            typ = self.__check_type(rule["to"])
+                            set_state(typ, self.state, rule["p"], rule["to"], source)
+
+                    elif rule["tot"] == "msg": # Check this
+                        lu = stateLookup(rule["to"])
+                        p = rule["p"].split(".")
+                        data = self.state
+
+                        for j in p[:-1]:
+                            data = data[j]
+
+                            if data["type"] == "object":
+                                data = data["properties"]
+
+                        data[p[-1]] = lu
+
+                    elif rule["tot"] == "str":
+                        self.state[rule["p"]] = {"type": "string", "source": source}
+
+                    elif rule["tot"] == "num":
+                        self.state[rule["p"]] = {"type": "number", "source": source}
+
+                    elif rule["tot"] == "bool":
+                        self.state[rule["p"]] = {"type": "boolean", "source": source}
+
+                    elif rule["tot"] == "json":
+                        properties = {}
                         self.state[rule["p"]] = {"type": "object"}
-                        self.state[rule["p"]]["properties"] = output
-                    else:
-                        typ = self.__check_type(rule["to"])
-                        set_state(typ, self.state, rule["p"], rule["to"], source)
 
-                elif rule["tot"] == "msg": # Check this
-                    lu = stateLookup(rule["to"])
-                    p = rule["p"].split(".")
-                    data = self.state
+                        for k, v in json.loads(rule["to"]).items():
+                            typ = self.__check_type(v)
+                            if typ == 'lookUp' or typ == 'typeError':
+                                raise Exception("Invalid type in json rule")
+                            set_state(typ, properties, k, None, source)
 
-                    for j in p[:-1]:
-                        data = data[j]
-
-                        if data["type"] == "object":
-                            data = data["properties"]
-
-                    data[p[-1]] = lu
-
-                elif rule["tot"] == "str":
-                    self.state[rule["p"]] = {"type": "string", "source": source}
-
-                elif rule["tot"] == "num":
-                    self.state[rule["p"]] = {"type": "number", "source": source}
-
-                elif rule["tot"] == "bool":
-                    self.state[rule["p"]] = {"type": "boolean", "source": source}
-
-                elif rule["tot"] == "json":
-                    properties = {}
-                    self.state[rule["p"]] = {"type": "object"}
-
-                    for k, v in json.loads(rule["to"]).items():
-                        typ = self.__check_type(v)
-                        if typ == 'lookUp' or typ == 'typeError':
-                            raise Exception("Invalid type in json rule")
-                        set_state(typ, properties, k, None, source)
-
-                    self.state[rule["p"]]["properties"] = properties
+                        self.state[rule["p"]]["properties"] = properties
+                elif rule["t"] == "delete":
+                    path = rule["p"].split(".")
+                    state = self.state
+                    for j in path[:-1]:
+                        if j not in state:
+                            raise Exception("Invalid path in delete rule: " + rule["p"])
+                        state = state[j]["properties"]
+                    del state[path[-1]]
+                else:
+                    raise Exception("Invalid t value in change node. Expected set or delete, got: " + rule["t"])
             except Exception as e:
                 print("Error in change node: ", e)
                 print(traceback.format_exc())
-    
+
     def __check_type(self, value):
+        if value.startswith("{"):
+            return "object"
+        
         if value.startswith('msg.') or ('payload.' in value and not value.startswith('"')):
             return 'lookUp'
         

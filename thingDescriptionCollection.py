@@ -68,6 +68,7 @@ class ThingDescriptionCollection:
                     del actValue["output"]["enum"]
 
                 return actValue["output"]
+        
         return None
     
     def getPropertyValue(self, propertyName):
@@ -86,4 +87,5 @@ class ThingDescriptionCollection:
                     propertyReturn["properties"] = propValue["properties"]
 
                 return propertyReturn
+        
         return None

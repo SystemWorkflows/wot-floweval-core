@@ -10,11 +10,13 @@ class ThingDescriptionCollection:
                 continue
 
             for actName, actValue in td["actions"].items():
-                if actName == actionName:
-                    if "input" in actValue:
-                        return actValue["input"]
-                    else:
-                        return {}
+                if actName != actionName:
+                    continue
+                
+                if "input" in actValue:
+                    return actValue["input"]
+                else:
+                    return {}
 
     def getEventData(self, eventName):
         for td in self.tds:

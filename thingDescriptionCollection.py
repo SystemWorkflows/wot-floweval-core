@@ -4,14 +4,14 @@ class ThingDescriptionCollection:
     def __init__(self, tds: list):
         self.tds = tds
 
-    def selectElement(self, type, name):
+    def selectElement(self, type, name, id = None):
         for td in self.tds:
-            if name in td[type]:
+            if (type in td) and (name in td[type]) and (id is None or td["id"] == id):
                 return td[type][name]
 
-    def selectTD(self, type, name):
+    def selectTD(self, type, name, id = None):
         for td in self.tds:
-            if name in td[type]:
+            if (name in td[type]) and (id is None or td["id"] == id):
                 return td
 
     def getActionInput(self, actionName):

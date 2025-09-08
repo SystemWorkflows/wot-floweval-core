@@ -173,6 +173,7 @@ class ChangeNode(SecondaryNode):
                             output = {}
                             for part in parts:
                                 part = part.split(":", 1)
+                                print(part)
                                 typ = self.__check_type(part[1])
                                 set_state(typ, output, part[0][1:-1], part[1], source)
                             self.state[rule["p"]] = {"type": "object"}

@@ -1,8 +1,18 @@
 class ThingDescriptionCollection:
     tds = None
     
-    def __init__(self, tds):
+    def __init__(self, tds: list):
         self.tds = tds
+
+    def selectElement(self, type, name):
+        for td in self.tds:
+            if name in td[type]:
+                return td[type][name]
+
+    def selectTD(self, type, name):
+        for td in self.tds:
+            if name in td[type]:
+                return td
 
     def getActionInput(self, actionName):
         for td in self.tds:

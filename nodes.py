@@ -151,33 +151,7 @@ class ChangeNode(SecondaryNode):
                 if rule["t"] == "set":
                     if rule["tot"] == "jsonata":
                         if rule["to"][0] == "{": # jsonata
-                            x = rule["to"][1:-1]
-                            x = x.replace(" ", "")
-                            # x = x.replace('&","', '&",a"')
-                            # parts = x.split(',"')
-                            # if len(parts) > 1:
-                            #     for x in range(1,len(parts)):
-                            #         parts[x] = '"' + parts[x]
-                            regex = r'({[^{}]*})|("[^"]*")|,'
-
-                            parts = []
-                            last_index = 0
-                            for match in re.finditer(regex, x):
-                                if match.group(0) == ',':
-                                    parts.append(x[last_index:match.start()].strip())
-                                    last_index = match.end()
-
-                             # Add the last part of the string
-                            parts.append(x[last_index:].strip())
-
-                            output = {}
-                            for part in parts:
-                                part = part.split(":", 1)
-                                print(part)
-                                typ = self.__check_type(part[1])
-                                set_state(typ, output, part[0][1:-1], part[1], source)
-                            self.state[rule["p"]] = {"type": "object"}
-                            self.state[rule["p"]]["properties"] = output
+                            self.state[rule["p"]] = objectHandler(rule["to"])
                         else:
                             typ = self.__check_type(rule["to"])
                             set_state(typ, self.state, rule["p"], rule["to"], source)

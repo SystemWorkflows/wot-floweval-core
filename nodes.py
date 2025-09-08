@@ -379,8 +379,8 @@ class InteractionNode(SecondaryNode):
                 required_source = required_input_property_value["source"]
                 incoming_source = self.incomingState["payload"]["properties"][required_input_property_name]["source"]
 
-                if required_source["type"] != incoming_source["type"]: # Does this need a closing else?
-                    continue
+                if required_source["type"] != incoming_source["type"]:
+                    return False
 
                 if required_source["type"] == "event":
                     return True

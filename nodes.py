@@ -87,7 +87,7 @@ class ChangeNode(SecondaryNode):
     def updateState(self):
         def stateLookup(path):
             search = path.split(".")
-
+            
             if search[0] == "msg":
                 search = search[1:]
 

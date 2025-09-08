@@ -332,84 +332,84 @@ class InteractionNode(SecondaryNode):
             return False
         
         return True
-    
-    def inputMatch(self, input):
+
+    def inputMatch(self, required_input):
         if not self.validatePayload():
             return False
-        
-        if (input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
-            if "source" not in input:
+
+        if (required_input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
+            if "source" not in required_input:
                 return True
-            
-            i_source = input["source"]
-            p_source = self.incomingState["payload"]["source"]
-            
-            if i_source["type"] != p_source["type"]:
+
+            required_source = required_input["source"]
+            incoming_source = self.incomingState["payload"]["source"]
+
+            if required_source["type"] != incoming_source["type"]:
                 return False
-            
-            if i_source["type"] == "event":
+
+            if required_source["type"] == "event":
                 return True
-            
-            if "name" not in i_source:
+
+            if "name" not in required_source:
                 return True
-            
-            if i_source["name"] != p_source["name"]:
+
+            if required_source["name"] != incoming_source["name"]:
                 return False
-            
-            if "pos" not in i_source:
+
+            if "pos" not in required_source:
                 return True
-            
-            if i_source["pos"]["location"] == "last":
-                node = i_source["pos"]["node"]
-                x = self.previousInteractions[len(p_source["prev"]) + 1:]
+
+            if required_source["pos"]["location"] == "last":
+                node = required_source["pos"]["node"]
+                x = self.previousInteractions[len(incoming_source["prev"]) + 1:]
                 return node not in x
 
-            if i_source["pos"]["location"] == "after":
-                node = i_source["pos"]["node"]
-                return node in p_source["prev"]
-            
-        elif (input["type"] == "object") and (self.incomingState["payload"]["type"] == "object"):
-            for k, v in input["properties"].items():
-                if k not in self.incomingState["payload"]["properties"]:
-                    return False
-                
-                if "source" not in v:
-                    return True
-                
-                i_source = v["source"]
-                p_source = self.incomingState["payload"]["properties"][k]["source"]
+            if required_source["pos"]["location"] == "after":
+                node = required_source["pos"]["node"]
+                return node in incoming_source["prev"]
 
-                if i_source["type"] != p_source["type"]: # Does this need a closing else?
-                    continue
-                
-                if i_source["type"] == "event":
-                    return True
-                
-                if "name" not in i_source:
-                    return True
-                
-                if i_source["name"] != p_source["name"]:
-                    return True
-                
-                if "pos" not in i_source:
-                    return True
-                
-                if i_source["pos"] != "last": # Finish this
+        elif (required_input["type"] == "object") and (self.incomingState["payload"]["type"] == "object"):
+            for required_input_property_name, required_input_property_value in required_input["properties"].items():
+                if required_input_property_name not in self.incomingState["payload"]["properties"]:
                     return False
-                
-                for interacts in reversed(self.previousInteractions):
+
+                if "source" not in required_input_property_value:
+                    return True
+
+                required_source = required_input_property_value["source"]
+                incoming_source = self.incomingState["payload"]["properties"][required_input_property_name]["source"]
+
+                if required_source["type"] != incoming_source["type"]: # Does this need a closing else?
+                    continue
+
+                if required_source["type"] == "event":
+                    return True
+
+                if "name" not in required_source:
+                    return True
+
+                if required_source["name"] != incoming_source["name"]:
+                    return True
+
+                if "pos" not in required_source:
+                    return True
+
+                if required_source["pos"] != "last": # Finish this
+                    return False
+
+                for interaction in reversed(self.previousInteractions):
                     name = None
 
-                    if interacts.node["type"] == "system-action-node":
-                        name = interacts.node["thingAction"]
+                    if interaction.node["type"] == "system-action-node":
+                        name = interaction.node["thingAction"]
 
-                    if  interacts.node["type"] == "system-property-node":
-                        name = interacts.node["thingProperty"]
+                    if interaction.node["type"] == "system-property-node":
+                        name = interaction.node["thingProperty"]
 
-                    if name != input["name"]:
+                    if name != required_input["name"]:
                         continue
-                    
-                    if p_source["id"] == interacts.node["id"]:
+
+                    if incoming_source["id"] == interaction.node["id"]:
                         return True
         
         return False

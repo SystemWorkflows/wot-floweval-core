@@ -6,6 +6,7 @@ import traceback
 from typing import Any, Tuple
 from src.helpers import flatten
 import re
+from abc import ABC, abstractmethod
 
 class NodeFactory:
     @staticmethod
@@ -56,6 +57,7 @@ class Node:
     def getErrors(self):
         return self.errors
     
+    @abstractmethod
     def match(self, subflow_matches):
         return []
     
@@ -100,7 +102,7 @@ class ChangeNode(SecondaryNode):
         self.addChildren()
     
     def updateState(self):
-        
+
         def stateLookup(path):
             search = path.split(".")
             

@@ -78,6 +78,21 @@ class SecondaryNode(Node):
         self.previousInteractions = previousInteractions
         self.interactions = copy.deepcopy(previousInteractions)
 
+    # def stateLookup(self,path):
+    #     search = path.split(".")
+
+    #     if search[0] == "msg":
+    #         search = search[1:]
+
+    #     data = copy.deepcopy(self.state)
+
+    #     for j in search:
+    #         data = data[j]
+    #         if data["type"] == "object":
+    #             data = data["properties"]
+
+    #     return data
+
 class ChangeNode(SecondaryNode):
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
@@ -85,6 +100,7 @@ class ChangeNode(SecondaryNode):
         self.addChildren()
     
     def updateState(self):
+        
         def stateLookup(path):
             search = path.split(".")
             
@@ -103,7 +119,7 @@ class ChangeNode(SecondaryNode):
                 data = data[search[-1]]
                 return data
             except Exception as e:
-                self.errors[self.node["id"]].append("Error in change node state lookup: " + str(e))
+                self.errors[self.node["id"]].append("Error in state lookup: " + str(e))
                 raise e
 
         def objectHandler(object):
@@ -141,6 +157,31 @@ class ChangeNode(SecondaryNode):
                 state_target[state_name] = {"type": "string", "source": source}
             elif typ == "object":
                 state_target[state_name] = objectHandler(lookupTarget)
+            elif typ == 'equation':
+                equation = lookupTarget.replace(" ", "")
+                parts = None
+                if "+" in equation:
+                    parts = equation.split("+")
+                    op = "add"
+                elif "-" in equation:
+                    parts = equation.split("-")
+                    op = "sub"
+                elif "*" in equation:
+                    parts = equation.split("*")
+                    op = "mul"
+                elif "/" in equation:
+                    parts = equation.split("/")
+                    op = "div"
+                if parts == None or len(parts) != 2:
+                    raise Exception("Invalid equation in change node: " + lookupTarget)
+                for part in parts:
+                    typ = self.__check_type(part)
+                    if typ == "lookUp":
+                        state_target[state_name] = stateLookup(part)
+                        break
+                state_target[state_name]["operation"] = op
+                state_target[state_name]["operands"] = parts
+                
             else:
                 raise Exception("jsonata data could not be handled")
 
@@ -183,9 +224,7 @@ class ChangeNode(SecondaryNode):
                         self.state[rule["p"]] = {"type": "object"}
 
                         for k, v in json.loads(rule["to"]).items():
-                            typ = self.__check_type(v)
-                            if typ == 'lookUp' or typ == 'typeError':
-                                raise Exception("Invalid type in json rule")
+                            typ = type(v)
                             set_state(typ, properties, k, None, source)
 
                         self.state[rule["p"]]["properties"] = properties
@@ -204,10 +243,13 @@ class ChangeNode(SecondaryNode):
                 print(traceback.format_exc())
 
     def __check_type(self, value):
-        if value.startswith("{"):
+
+        if (type(value)== str) and (value.startswith("{")):
             return "object"
         
-        if value.startswith('msg.') or ('payload.' in value and not value.startswith('"')):
+        if (type(value)== str) and (value.startswith('msg.') or ('payload.' in value and not value.startswith('"'))):
+            if "+" in value or "-" in value or "*" in value or "/" in value:
+                return 'equation'
             return 'lookUp'
         
         try:

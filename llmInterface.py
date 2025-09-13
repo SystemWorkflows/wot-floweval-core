@@ -13,6 +13,9 @@ class llmFactory:
             case "models/gemini-2.5-pro":               return geminiChat(*parameters)
             case "models/gemini-2.5-flash-lite":        return geminiChat(*parameters)
             case "openai/gpt-oss-120b:free":            return openRouterChat(*parameters)
+            case "openai/gpt-oss-20b:free":             return openRouterChat(*parameters)
+            case "openrouter/sonoma-sky-alpha":         return openRouterChat(*parameters)
+            case "google/gemini-2.0-flash-exp:free":         return openRouterChat(*parameters)
             case _:                                     return None
 
 
@@ -74,6 +77,8 @@ class openRouterChat(llmChat):
                 }
             ]
             }
-        ]
+        ],
+        response_format={ "type": "json_object" }
         )
         print(completion.choices[0].message.content)
+        return {"response": completion.choices[0].message.content, "metadata":{}}

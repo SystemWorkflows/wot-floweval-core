@@ -7,6 +7,7 @@ from typing import Any, Tuple
 from src.helpers import flatten
 import re
 from abc import ABC, abstractmethod
+from src.errors import *
 
 class NodeFactory:
     @staticmethod
@@ -94,6 +95,66 @@ class SecondaryNode(Node):
     #             data = data["properties"]
 
     #     return data
+
+class PassThroughNode(SecondaryNode):
+    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+        super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
+        self.state = self.incomingState
+        self.addChildren()
+
+class SwitchNode(SecondaryNode):
+    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+        super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
+        self.updateConditions()
+        self.addChildren()
+
+    def updateConditions(self):
+        def stateLookup(path):
+            search = path.split(".")
+
+            if search[0] == "msg":
+                search = search[1:]
+
+            data = copy.deepcopy(self.incomingState)
+
+            for j in search:
+                data = data[j]
+                if data["type"] == "object":
+                    data = data["properties"]
+
+            return data
+
+        rules = self.node["rules"]
+
+        try:
+            property = stateLookup(self.node["property"])
+        except Exception as e:
+            self.errors[self.node["id"]].append("Error in switch node: could not find property in Node-Red msg.")
+            print("Error in switch node: ", e)
+            print(traceback.format_exc())
+            property = {}
+
+        for rule in rules:
+            rule["property"] = property
+
+    def addChildren(self):
+        if len(self.node["wires"]) != len(self.node["rules"]):
+            return
+        
+        for nodeIndex in range(0, len(self.node["wires"])):
+            for connectedNode in self.node["wires"][nodeIndex]: 
+                connectedNodeType = self.flow[connectedNode]["type"]
+
+                state, conditions, interactions = copy.deepcopy((
+                    self.state,
+                    self.incomingConditions + [self.node["rules"][nodeIndex]],
+                    self.interactions
+                ))
+
+                child = NodeFactory.produceNode(connectedNodeType, (self.flow[connectedNode], self.flow, self.tds, state, conditions, interactions))
+
+                self.addChild(child)
+                self.errors = self.errors | child.getErrors()
 
 class ChangeNode(SecondaryNode):
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
@@ -185,6 +246,7 @@ class ChangeNode(SecondaryNode):
                 state_target[state_name]["operands"] = parts
                 
             else:
+                self.errors[self.node["id"]].append("could not handle jsonata data type in change node rule")
                 raise Exception("jsonata data could not be handled")
 
         for rule in self.node["rules"]:
@@ -239,6 +301,7 @@ class ChangeNode(SecondaryNode):
                         state = state[j]["properties"]
                     del state[path[-1]]
                 else:
+                    self.errors[self.node["id"]].append("Invalid t value in change node. Expected set or delete, got: " + rule["t"])
                     raise Exception("Invalid t value in change node. Expected set or delete, got: " + rule["t"])
             except Exception as e:
                 print("Error in change node: ", e)
@@ -285,7 +348,7 @@ class InteractionNode(SecondaryNode):
         
         if payload["type"] != "object":
             if payload["type"] != expectedInput["type"]:
-                self.errors[self.node["id"]].append("expected: " + json.dumps(expectedInput) + " got: " + json.dumps(payload))
+                self.errors[self.node["id"]].append("Error with input! Expected: " + json.dumps(expectedInput) + ". Got: " + json.dumps(payload) + ".")
                 return False
 
             return True
@@ -305,7 +368,7 @@ class InteractionNode(SecondaryNode):
                 actInProp[propertyName] = None
 
         if sorted(incProp) != sorted(actInProp):
-            self.errors[self.node["id"]].append("expected: " + json.dumps(expectedInput) + " got: " + json.dumps(payload))
+            self.errors[self.node["id"]].append("Error with input! Expected: " + json.dumps(expectedInput) + ". Got: " + json.dumps(payload) + ".")
             return False
 
         return True
@@ -455,65 +518,6 @@ class InteractionNode(SecondaryNode):
         return {"status": status, "name": self.node["thingAction"], "match": match, "candidates": candidates} # Needs reversing to check flow validity
 
 
-class PassThroughNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
-        super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
-        self.state = self.incomingState
-        self.addChildren()
-
-class SwitchNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
-        super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
-        self.updateConditions()
-        self.addChildren()
-
-    def updateConditions(self):
-        def stateLookup(path):
-            search = path.split(".")
-
-            if search[0] == "msg":
-                search = search[1:]
-
-            data = copy.deepcopy(self.incomingState)
-
-            for j in search:
-                data = data[j]
-                if data["type"] == "object":
-                    data = data["properties"]
-
-            return data
-
-        rules = self.node["rules"]
-
-        try:
-            property = stateLookup(self.node["property"])
-        except Exception as e:
-            print("Error in switch node: ", e)
-            print(traceback.format_exc())
-            property = {}
-
-        for rule in rules:
-            rule["property"] = property
-
-    def addChildren(self):
-        if len(self.node["wires"]) != len(self.node["rules"]):
-            return
-        
-        for nodeIndex in range(0, len(self.node["wires"])):
-            for connectedNode in self.node["wires"][nodeIndex]: 
-                connectedNodeType = self.flow[connectedNode]["type"]
-
-                state, conditions, interactions = copy.deepcopy((
-                    self.state,
-                    self.incomingConditions + [self.node["rules"][nodeIndex]],
-                    self.interactions
-                ))
-
-                child = NodeFactory.produceNode(connectedNodeType, (self.flow[connectedNode], self.flow, self.tds, state, conditions, interactions))
-
-                self.addChild(child)
-                self.errors = self.errors | child.getErrors()
-
 #%% System-Nodes
 class SystemActionNode(InteractionNode):
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
@@ -554,8 +558,6 @@ class SystemActionNode(InteractionNode):
         expectedInput = self.tds.getActionInput(self.node["thingAction"])
         return super()._validatePayload(expectedInput)
 
-            
-    
     def updateState(self):
         if not self.node["outputToMsg"]:
             self.state = self.incomingState
@@ -584,7 +586,6 @@ class SystemActionNode(InteractionNode):
 
         self.state["payload"] = output
 
-    
     def match(self, subflow_matches):
         candidates = []
         for subflow_match in subflow_matches:
@@ -593,42 +594,12 @@ class SystemActionNode(InteractionNode):
 
         return super().match(candidates, subflow_matches)
 
-class SystemEventNode(Node):
-    def __init__(self, node, flow, tds):
-        super().__init__(node, flow, tds)
-        self.extractState()
-        self.addChildren()
-    
-    def extractState(self):
-        eventData = self.tds.getEventData(self.node["thingEvent"])
-        self.state["payload"] = eventData
-        if self.state["payload"] == None:
-            return
-        
-        if self.state["payload"]["type"] != "object":
-            self.state["payload"]["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
-        
-        for property in self.state["payload"]["properties"].values():
-            property["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
-
-    def match(self, subflow_matches):
-        children = self.getChildren()
-        matches = {}
-
-        for child in children:
-            if child.node["type"] == "system-action-node" or (child.node["type"] == "system-property-node" and child.node["mode"] == "write"):
-                matches[child.node["id"]] = child.match(subflow_matches)
-
-        left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
-
-        return {"matches": matches, "left_over": left_over}
-
 
 class SystemPropertyNode(InteractionNode):
+
     def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
 
-    
     def updateState(self):
         if self.node["mode"] != "read":
             self.state = self.incomingState
@@ -660,8 +631,6 @@ class SystemPropertyNode(InteractionNode):
         propertyInput = self.tds.getPropertyValue(self.node["thingProperty"])
         return super()._validatePayload(propertyInput)
 
-
-
     def match(self, subflow_matches):
         candidates = []
 
@@ -670,3 +639,34 @@ class SystemPropertyNode(InteractionNode):
                 candidates.append(subflow_match)
 
         return super().match(candidates, subflow_matches)
+
+
+class SystemEventNode(Node):
+    def __init__(self, node, flow, tds):
+        super().__init__(node, flow, tds)
+        self.extractState()
+        self.addChildren()
+    
+    def extractState(self):
+        eventData = self.tds.getEventData(self.node["thingEvent"])
+        self.state["payload"] = eventData
+        if self.state["payload"] == None:
+            return
+        
+        if self.state["payload"]["type"] != "object":
+            self.state["payload"]["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
+        
+        for property in self.state["payload"]["properties"].values():
+            property["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
+
+    def match(self, subflow_matches):
+        children = self.getChildren()
+        matches = {}
+
+        for child in children:
+            if child.node["type"] == "system-action-node" or (child.node["type"] == "system-property-node" and child.node["mode"] == "write"):
+                matches[child.node["id"]] = child.match(subflow_matches)
+
+        left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
+
+        return {"matches": matches, "left_over": left_over}

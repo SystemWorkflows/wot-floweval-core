@@ -312,7 +312,7 @@ class ChangeNode(SecondaryNode):
         if (type(value)== str) and (value.startswith("{")):
             return "object"
         
-        if (type(value)== str) and (value.startswith('msg.') or ('payload.' in value and not value.startswith('"'))):
+        if (type(value)== str) and (value.startswith('msg.') or ('payload.' in value and not value.startswith('"'))) and "&" not in value:
             if "+" in value or "-" in value or "*" in value or "/" in value:
                 return 'equation'
             return 'lookUp'

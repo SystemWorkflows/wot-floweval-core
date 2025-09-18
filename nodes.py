@@ -182,7 +182,7 @@ class ChangeNode(SecondaryNode):
                 data = data[search[-1]]
                 return data
             except Exception as e:
-                self.errors[self.node["id"]].append("Error in state lookup: " + str(e))
+                self.errors[self.node["id"]].append("Error in state lookup in change node with id: " + str(self.node["id"]) + ". Could not find path (" + path + ") from provided rules in change node with  data state: " + json.dumps(self.state))
                 raise e
 
         def objectHandler(object):
@@ -244,7 +244,7 @@ class ChangeNode(SecondaryNode):
                         break
                 state_target[state_name]["operation"] = op
                 state_target[state_name]["operands"] = parts
-                
+
             else:
                 self.errors[self.node["id"]].append("could not handle jsonata data type in change node rule")
                 raise Exception("jsonata data could not be handled")

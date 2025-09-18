@@ -55,6 +55,8 @@ class geminiChat(llmChat):
             raise Exception("failed to generate flow")
         
         return {"response": resp, "metadata":{"time": delta_t, "input_tokens": response.usage_metadata.prompt_token_count, "output_tokens": response.usage_metadata.candidates_token_count}}
+
+
 class openRouterChat(llmChat):
     def __init__(self, parameters):
         self.parameters = parameters
@@ -65,20 +67,26 @@ class openRouterChat(llmChat):
 
 
     def send_message(self, prompt):
+        time_start = time.time()
         completion = self.client.chat.completions.create(
-        model=self.parameters.get("model"),
-        messages=[
-            {
-            "role": "user",
-            "content": [
+            model=self.parameters.get("model"),
+            messages=[
                 {
-                "type": "text",
-                "text": prompt
+                "role": "user",
+                "content": [
+                    {
+                    "type": "text",
+                    "text": prompt
+                    }
+                ]
                 }
             ]
-            }
-        ],
-        response_format={ "type": "json_object" }
         )
-        print(completion.choices[0].message.content)
-        return {"response": completion.choices[0].message.content, "metadata":{}}
+        time_end = time.time()
+        delta_t = time_end - time_start
+        resp = completion.choices[0].message.content
+        
+        if resp[3:7] == "json":
+            resp = resp[8:-3]
+
+        return {"response": resp, "metadata":{"time": delta_t, "input_tokens": completion.usage.prompt_tokens, "output_tokens": completion.usage.completion_tokens}}

@@ -13,7 +13,9 @@ class llmFactory:
             case "models/gemini-2.5-pro":               return geminiChat(*parameters)
             case "models/gemini-2.5-flash-lite":        return geminiChat(*parameters)
             case "openai/gpt-oss-120b":                 return openRouterChat(*parameters)
+            case "openai/o4-mini-high":                 return openRouterChat(*parameters)
             case "openai/gpt-5-mini":                   return openRouterChat(*parameters)
+            case "openai/gpt-5":                        return openRouterChat(*parameters)
             case "openai/gpt-oss-20b:free":             return openRouterChat(*parameters)
             case "deepseek/deepseek-r1:free":           return openRouterChat(*parameters)
             case "deepseek/deepseek-chat-v3.1:free":    return openRouterChat(*parameters)
@@ -84,7 +86,9 @@ class openRouterChat(llmChat):
                     }
                 ]
                 }
-            ]
+            ],
+            temperature=self.parameters["temperature"],
+            seed=self.parameters["seed"]
         )
         time_end = time.time()
         delta_t = time_end - time_start

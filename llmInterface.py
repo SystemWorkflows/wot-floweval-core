@@ -12,10 +12,14 @@ class llmFactory:
             case "models/gemini-2.5-flash":             return geminiChat(*parameters)
             case "models/gemini-2.5-pro":               return geminiChat(*parameters)
             case "models/gemini-2.5-flash-lite":        return geminiChat(*parameters)
-            case "openai/gpt-oss-120b:free":            return openRouterChat(*parameters)
+            case "openai/gpt-oss-120b":                 return openRouterChat(*parameters)
+            case "openai/gpt-5-mini":                   return openRouterChat(*parameters)
             case "openai/gpt-oss-20b:free":             return openRouterChat(*parameters)
+            case "deepseek/deepseek-r1:free":           return openRouterChat(*parameters)
+            case "deepseek/deepseek-chat-v3.1:free":    return openRouterChat(*parameters)
             case "openrouter/sonoma-sky-alpha":         return openRouterChat(*parameters)
-            case "google/gemini-2.0-flash-exp:free":         return openRouterChat(*parameters)
+            case "z-ai/glm-4.5-air:free":               return openRouterChat(*parameters)
+            case "qwen/qwen3-coder:free":               return openRouterChat(*parameters)
             case _:                                     return None
 
 
@@ -84,9 +88,16 @@ class openRouterChat(llmChat):
         )
         time_end = time.time()
         delta_t = time_end - time_start
-        resp = completion.choices[0].message.content
-        
+        resp = None
+        try:
+            resp = completion.choices[0].message.content
+            if resp == None:
+                raise Exception("failed to generate flow")
+        except:
+            raise Exception("failed to generate flow")
+        resp = resp.strip()
         if resp[3:7] == "json":
             resp = resp[8:-3]
+        resp = resp.strip("`")
 
         return {"response": resp, "metadata":{"time": delta_t, "input_tokens": completion.usage.prompt_tokens, "output_tokens": completion.usage.completion_tokens}}

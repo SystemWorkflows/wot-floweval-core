@@ -31,7 +31,7 @@ class Node:
         self.state = {}
         self.conditions = []
         self.interactions = []
-        self.children = []
+        self.children: list[Node] = []
         self.errors = { self.node["id"] : [] }
 
     def addChild(self, child):
@@ -40,16 +40,23 @@ class Node:
     def addChildren(self):
         for nodeID in flatten(self.node["wires"]):
             state, conditions, interactions = copy.deepcopy((self.state, self.conditions, self.interactions))
+            if nodeID not in self.flow:
+                self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(nodeID) +". Node not found in flow.")
+                continue
             receiverType = self.flow[nodeID]["type"]
-
+            if nodeID in [c.node["id"] for c in interactions]:
+                self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(nodeID) +". Loop detected.")
+                continue
+            if receiverType == "system-event-node":
+                self.errors[self.node["id"]].append("Cannot connect to system event node with id: " + str(nodeID))
+                continue
             child = NodeFactory.produceNode(receiverType, (self.flow[nodeID], self.flow, self.tds, state, conditions, interactions))
 
             self.addChild(child)
             self.errors = self.errors | child.getErrors()
 
     def getChildren(self):
-        children = copy.deepcopy(self.children)
-
+        children = copy.copy(self.children)
         for child in self.children:
             children += child.getChildren()
 

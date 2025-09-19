@@ -172,8 +172,8 @@ def convert_flow_full(flow:list, tds:dict, tddURI) -> list:
 
         flow.append({"type":"tab","label":"Flow 1","id":"test flow"})
         return flow
-    except Exception as e:
+    except Exception as e:# shouldnt silent fail
         print(e)
         traceback.print_exception(type(e), e, e.__traceback__)
         print("Error in converting flow")
-        return None
+        raise Exception("failed to convert flow to full format, check all variables are correct.")

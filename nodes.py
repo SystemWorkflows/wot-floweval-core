@@ -24,22 +24,23 @@ class Node:
     state = {}
     children = []
     
-    def __init__(self, node, flow, tds):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict]):
         self.node = node
         self.flow = flow
         self.tds = tds
         self.state = {}
-        self.conditions = []
-        self.interactions = []
+        self.conditions: list[dict] = []
+        self.interactions: list[Node] = []
         self.children: list[Node] = []
-        self.errors = { self.node["id"] : [] }
+        self.errors: dict[str, list[str]] = { self.node["id"] : [] }
 
     def addChild(self, child):
         self.children.append(child)
 
     def addChildren(self):
         for nodeID in flatten(self.node["wires"]):
-            state, conditions, interactions = copy.deepcopy((self.state, self.conditions, self.interactions))
+            state, conditions= copy.deepcopy((self.state, self.conditions))
+            interactions = copy.copy(self.interactions)
             if nodeID not in self.flow:
                 self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(nodeID) +". Node not found in flow.")
                 continue
@@ -79,7 +80,7 @@ class Node:
 
 #%% Secondary Nodes
 class SecondaryNode(Node):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds)
         self.incomingState = incomingState
         self.state = copy.deepcopy(incomingState)
@@ -104,13 +105,13 @@ class SecondaryNode(Node):
     #     return data
 
 class PassThroughNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
         self.state = self.incomingState
         self.addChildren()
 
 class SwitchNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
         self.updateConditions()
         self.addChildren()
@@ -164,7 +165,7 @@ class SwitchNode(SecondaryNode):
                 self.errors = self.errors | child.getErrors()
 
 class ChangeNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
         self.updateState()
         self.addChildren()
@@ -331,7 +332,7 @@ class ChangeNode(SecondaryNode):
             return 'typeError'
 
 class InteractionNode(SecondaryNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions=[], previousInteractions=[]):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
         self.validatePayload()
         self.updateState()
@@ -344,7 +345,7 @@ class InteractionNode(SecondaryNode):
     def validatePayload(self):
         pass
 
-    def _validatePayload(self, expectedInput):
+    def _validatePayload(self, expectedInput: dict):
         payload = copy.deepcopy(self.incomingState["payload"])
 
         if payload == {} and expectedInput == {}:
@@ -380,7 +381,7 @@ class InteractionNode(SecondaryNode):
 
         return True
 
-    def conditionsMatch(self, conditions):
+    def conditionsMatch(self, conditions: list[dict]):
         for condition in conditions:
             if ("property" not in condition) or ("source" not in condition["property"]):
                     continue
@@ -405,7 +406,7 @@ class InteractionNode(SecondaryNode):
             return True
         
 
-    def preConditionsMatch(self, pre_nodes):
+    def preConditionsMatch(self, pre_nodes: list[str]):
         if pre_nodes == []:
             return True
         
@@ -421,7 +422,7 @@ class InteractionNode(SecondaryNode):
         
         return True
 
-    def inputMatch(self, required_input):
+    def inputMatch(self, required_input: dict):
         if not self.validatePayload():
             return False
 
@@ -502,7 +503,7 @@ class InteractionNode(SecondaryNode):
         
         return False
 
-    def match(self, candidates, subflow_matches):
+    def match(self, candidates: list, subflow_matches: list):
         match = {"preConditionMatch": False, "conditionsMatch": False, "inputMatch": False}
         candidates = [cand for cand in candidates if self.preConditionsMatch(cand[1]["pre_nodes"])]
 
@@ -527,7 +528,7 @@ class InteractionNode(SecondaryNode):
 
 #%% System-Nodes
 class SystemActionNode(InteractionNode):
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
 
     def extractConditions(self):
@@ -593,7 +594,7 @@ class SystemActionNode(InteractionNode):
 
         self.state["payload"] = output
 
-    def match(self, subflow_matches):
+    def match(self, subflow_matches: list):
         candidates = []
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.node["thingAction"]:
@@ -604,7 +605,7 @@ class SystemActionNode(InteractionNode):
 
 class SystemPropertyNode(InteractionNode):
 
-    def __init__(self, node, flow, tds, incomingState, incomingConditions = [], previousInteractions = []):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
         super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
 
     def updateState(self):
@@ -638,7 +639,7 @@ class SystemPropertyNode(InteractionNode):
         propertyInput = self.tds.getPropertyValue(self.node["thingProperty"])
         return super()._validatePayload(propertyInput)
 
-    def match(self, subflow_matches):
+    def match(self, subflow_matches: list):
         candidates = []
 
         for subflow_match in subflow_matches:
@@ -649,7 +650,7 @@ class SystemPropertyNode(InteractionNode):
 
 
 class SystemEventNode(Node):
-    def __init__(self, node, flow, tds):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict]):
         super().__init__(node, flow, tds)
         self.extractState()
         self.addChildren()
@@ -666,7 +667,7 @@ class SystemEventNode(Node):
         for property in self.state["payload"]["properties"].values():
             property["source"] = {"type":"event", "name": self.node["thingEvent"], "id": self.node["id"]}
 
-    def match(self, subflow_matches):
+    def match(self, subflow_matches: list):
         children = self.getChildren()
         matches = {}
 

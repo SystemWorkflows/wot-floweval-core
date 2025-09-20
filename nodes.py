@@ -504,21 +504,30 @@ class InteractionNode(SecondaryNode):
         return False
 
     def match(self, candidates: list, subflow_matches: list):
-        match = {"preConditionMatch": False, "conditionsMatch": False, "inputMatch": False}
+        match = {
+            "preConditionMatch": False, 
+            "conditionsMatch": False, 
+            "inputMatch": False
+        }
+
         candidates = [cand for cand in candidates if self.preConditionsMatch(cand[1]["pre_nodes"])]
 
-        if candidates != []:
+        if len(candidates) > 0:
             match["preConditionMatch"] = True
-            candidates = [cand for cand in candidates if self.conditionsMatch(cand[1]["conditions"])]
+        
+        candidates = [cand for cand in candidates if self.conditionsMatch(cand[1]["conditions"])]
 
-            if candidates != []:
-                match["conditionsMatch"] = True
-                candidates = [cand for cand in candidates if self.inputMatch(cand[1]["input"])]
+        if len(candidates) > 0:
+            match["conditionsMatch"] = True
+        
+        candidates = [cand for cand in candidates if self.inputMatch(cand[1]["input"])]
 
-                if candidates != []:
-                    match["inputMatch"] = True
-
-        for candidate in candidates: # Should be no more than one candidate but just in case checks list, this check prevents multiple nodes matching against the same case.
+        if len(candidates) > 0:
+            match["inputMatch"] = True
+    
+        # Should be no more than one candidate but just in case checks list, 
+        # this check prevents multiple nodes matching against the same case.
+        for candidate in candidates:
             subflow_matches.remove(candidate)
 
         status = match["preConditionMatch"] and match["conditionsMatch"] and match["inputMatch"]

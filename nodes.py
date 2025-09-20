@@ -405,7 +405,8 @@ class InteractionNode(SecondaryNode):
         if conditions == self.conditions:
             return True
         
-
+        return False
+    
     def preConditionsMatch(self, pre_nodes: list[str]):
         if pre_nodes == []:
             return True
@@ -414,7 +415,7 @@ class InteractionNode(SecondaryNode):
         for i in self.previousInteractions: # Add filtering to exclude irrelevant interactions when selecting which interactions to check
             if i.node["type"] == "system-action-node":
                 prev.append(i.node["thingAction"])
-            if (i.node["type"] == "system-property-node") and (i.node["mode"] == "write"):
+            elif (i.node["type"] == "system-property-node") and (i.node["mode"] == "write"):
                 prev.append(i.node["thingProperty"])
 
         if pre_nodes != prev:
@@ -492,7 +493,7 @@ class InteractionNode(SecondaryNode):
                     if interaction.node["type"] == "system-action-node":
                         name = interaction.node["thingAction"]
 
-                    if interaction.node["type"] == "system-property-node":
+                    elif interaction.node["type"] == "system-property-node":
                         name = interaction.node["thingProperty"]
 
                     if name != required_input["name"]:
@@ -532,7 +533,13 @@ class InteractionNode(SecondaryNode):
 
         status = match["preConditionMatch"] and match["conditionsMatch"] and match["inputMatch"]
 
-        return {"status": status, "name": self.node["thingAction"], "match": match, "candidates": candidates} # Needs reversing to check flow validity
+        # Needs reversing to check flow validity
+        return {
+            "status": status, 
+            "name": self.node["thingAction"], 
+            "match": match, 
+            "candidates": candidates
+        }
 
 
 #%% System-Nodes

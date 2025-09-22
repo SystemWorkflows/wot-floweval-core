@@ -677,7 +677,9 @@ class SystemEventNode(Node):
 
         for child in children:
             if child.node["type"] == "system-action-node" or (child.node["type"] == "system-property-node" and child.node["mode"] == "write"):
-                matches[child.node["id"]] = child.match(subflow_matches)# handle cases where node is duplicated through flow splitting
+                if child.node["id"] not in matches:
+                    matches[child.node["id"]] = []
+                matches[child.node["id"]].append(child.match(subflow_matches))# handle cases where node is duplicated through flow splitting
 
         left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
 

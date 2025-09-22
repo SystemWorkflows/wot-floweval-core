@@ -147,10 +147,14 @@ class SwitchNode(SecondaryNode):
 
     def addChildren(self):
         if len(self.node["wires"]) != len(self.node["rules"]):
+            self.errors[self.node["id"]].append("Number of rules does not match number of outputs in switch node.")
             return
         
         for nodeIndex in range(0, len(self.node["wires"])):
-            for connectedNode in self.node["wires"][nodeIndex]: 
+            for connectedNode in self.node["wires"][nodeIndex]:
+                if connectedNode not in self.flow:
+                    self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(connectedNode) +". Node not found in flow.")
+                    continue
                 connectedNodeType = self.flow[connectedNode]["type"]
 
                 state, conditions, interactions = copy.deepcopy((
@@ -673,7 +677,7 @@ class SystemEventNode(Node):
 
         for child in children:
             if child.node["type"] == "system-action-node" or (child.node["type"] == "system-property-node" and child.node["mode"] == "write"):
-                matches[child.node["id"]] = child.match(subflow_matches)
+                matches[child.node["id"]] = child.match(subflow_matches)# handle cases where node is duplicated through flow splitting
 
         left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
 

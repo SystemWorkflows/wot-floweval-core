@@ -3,6 +3,7 @@ from google.genai import types
 from openai import OpenAI
 from typing import Any, Tuple
 import time
+import json
 class llmFactory:
     llmChat = None
 
@@ -88,7 +89,17 @@ class openRouterChat(llmChat):
                 }
             ],
             temperature=self.parameters["temperature"],
-            seed=self.parameters["seed"]
+            seed=self.parameters["seed"],
+            reasoning_effort="high", # low, medium, high
+            extra_body={
+                "provider": {
+                    "require_parameters": True,
+                    "only":[
+                        "ncompass"
+                    ],
+                    "allow_fallbacks": False
+                }
+            }
         )
         time_end = time.time()
         delta_t = time_end - time_start

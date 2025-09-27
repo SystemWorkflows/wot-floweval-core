@@ -71,23 +71,23 @@ class openRouterChat(llmChat):
             base_url="https://openrouter.ai/api/v1",
             api_key="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"#no billing connected
         )
+        self.messages = []
 
 
     def send_message(self, prompt):
+        self.messages.append({
+        "role": "user",
+        "content": [
+            {
+            "type": "text",
+            "text": prompt
+            }
+        ]
+        })
         time_start = time.time()
         completion = self.client.chat.completions.create(
             model=self.parameters.get("model"),
-            messages=[
-                {
-                "role": "user",
-                "content": [
-                    {
-                    "type": "text",
-                    "text": prompt
-                    }
-                ]
-                }
-            ],
+            messages=self.messages,
             temperature=self.parameters["temperature"],
             seed=self.parameters["seed"],
             reasoning_effort="high", # low, medium, high
@@ -110,6 +110,17 @@ class openRouterChat(llmChat):
                 raise Exception("failed to generate flow")
         except:
             raise Exception("failed to generate flow")
+        
+        self.messages.append({
+            "role": "assistant",
+            "content": [
+                {
+                "type": "text",
+                "text": resp
+                }
+            ]
+        })
+
         resp = resp.strip()
         if resp[3:7] == "json":
             resp = resp[8:-3]

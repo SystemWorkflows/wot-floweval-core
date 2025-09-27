@@ -101,6 +101,7 @@ def convert_flow_lite(flow:list,tds:dict) -> list:
 
 def convert_flow_full(flow:list, tds:dict, tddURI) -> list:
     tdc = ThingDescriptionCollection(tds=tds)
+
     try:
         for node in flow:
             node["z"] = "test flow"
@@ -172,7 +173,7 @@ def convert_flow_full(flow:list, tds:dict, tddURI) -> list:
 
         flow.append({"type":"tab","label":"Flow 1","id":"test flow"})
         return flow
-    except Exception as e:# shouldnt silent fail
+    except Exception as e:
         print(e)
         traceback.print_exception(type(e), e, e.__traceback__)
         print("Error in converting flow")

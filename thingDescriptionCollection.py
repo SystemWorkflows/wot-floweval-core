@@ -1,20 +1,20 @@
 class ThingDescriptionCollection:
     tds = None
-    
-    def __init__(self, tds: list):
+
+    def __init__(self, tds: list[dict]):
         self.tds = tds
 
-    def selectElement(self, type, name, id = None):
+    def selectElement(self, type: str, name: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if (type in td) and (name in td[type]) and (id is None or td["id"] == id):
                 return td[type][name]
 
-    def selectTD(self, type, name, id = None):
+    def selectTD(self, type: str, name: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if (name in td[type]) and (id is None or td["id"] == id):
                 return td
 
-    def getActionInput(self, actionName):
+    def getActionInput(self, actionName: str) -> dict | None:
         for td in self.tds:
             if "actions" not in td:
                 continue
@@ -28,7 +28,7 @@ class ThingDescriptionCollection:
                 else:
                     return {}
 
-    def getEventData(self, eventName):
+    def getEventData(self, eventName: str) -> dict | None:
         for td in self.tds:
             if "events" not in td:
                 continue
@@ -61,7 +61,7 @@ class ThingDescriptionCollection:
 
                 return evtValue["data"]
 
-    def getActionOutput(self, actionName):
+    def getActionOutput(self, actionName: str) -> dict | None:
         for td in self.tds:
             if "actions" not in td:
                 continue
@@ -82,8 +82,8 @@ class ThingDescriptionCollection:
                 return actValue["output"]
         
         return None
-    
-    def getPropertyValue(self, propertyName):
+
+    def getPropertyValue(self, propertyName: str) -> dict | None:
         for td in self.tds:
             if "properties" not in td:
                 continue

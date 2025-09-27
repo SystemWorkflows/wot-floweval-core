@@ -15,6 +15,9 @@ class NodeFactory:
         match name:
             case "system-action-node":      return SystemActionNode(*parameters)
             case "system-property-node":    return SystemPropertyNode(*parameters)
+            case "sys-evt-serv":            return SystemEventServerNode(*parameters)
+            case "sys-act-serv-out":        return SystemActionServerOutNode(*parameters)
+            case "sys-prop-serv-out":       return SystemPropertyServerOutNode(*parameters)
             case "change":                  return ChangeNode(*parameters)
             case "switch":                  return SwitchNode(*parameters)
             case _:                         return PassThroughNode(*parameters)
@@ -652,6 +655,28 @@ class SystemPropertyNode(InteractionNode):
 
         return super().match(candidates, subflow_matches)
 
+class SystemEventServerNode(InteractionNode):
+    def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict], incomingState: dict, incomingConditions: list[dict] = [], previousInteractions: list[Node] = []):
+        super().__init__(node, flow, tds, incomingState, incomingConditions, previousInteractions)
+
+    def validatePayload(self):
+        eventData = self.tds.getEventData(self.node["eventName"])
+        return super()._validatePayload(eventData)
+    
+    def match(self, subflow_matches: list):
+        candidates = []
+
+        for subflow_match in subflow_matches:
+            if subflow_match[0] == self.node["eventName"]:
+                candidates.append(subflow_match)
+
+        return super().match(candidates, subflow_matches)
+    
+class SystemPropertyServerOutNode(InteractionNode):
+    pass
+
+class SystemActionServerOutNode(InteractionNode):
+    pass
 
 class SystemEventNode(Node):
     def __init__(self, node: dict, flow: dict[str, dict], tds: list[dict]):
@@ -684,3 +709,9 @@ class SystemEventNode(Node):
         left_over = copy.deepcopy(subflow_matches) # Adjust scores for left over cases- e.g. not enough nodes in real flow compared to true flow
 
         return {"matches": matches, "left_over": left_over}
+    
+class SystemPropertyServerNode(InteractionNode):
+    pass
+
+class SystemActionServerNode(InteractionNode):
+    pass

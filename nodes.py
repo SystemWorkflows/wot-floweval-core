@@ -22,6 +22,14 @@ class NodeFactory:
             case "switch":                  return SwitchNode(*parameters)
             case _:                         return PassThroughNode(*parameters)
 
+    @staticmethod
+    def produceTriggerNode(name:str, parameters:Tuple[Any]):
+        match name:
+            case "system-event-node":       return SystemEventNode(*parameters)
+            case "sys-act-serv":            return SystemActionServerNode(*parameters)
+            case "sys-prop-serv":           return SystemPropertyServerNode(*parameters)
+            case _:                         return None
+
 class Node:
     node = None
     state = {}

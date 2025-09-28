@@ -110,7 +110,6 @@ def convert_flow_full(flow:list, tds:dict, tddURI) -> list:
                 case "sys-evt":
                     node["type"] = "system-event-node"
                     node["thingDirectoryURI"] = tddURI
-
                     event = tdc.selectElement("events", node["thingEvent"], id=node["thingID"])
                     description = ""
 

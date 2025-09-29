@@ -524,13 +524,27 @@ class InteractionNode(SecondaryNode):
                         return True
         
         return False
+    
+    def thingMatch(self, thingID: str) -> bool:
+        pass
+
 
     def match(self, candidates: list, subflow_matches: list):
         match = {
+            "thingMatch": False,
             "preConditionMatch": False, 
             "conditionsMatch": False, 
             "inputMatch": False
         }
+
+        if "thingID" in candidates[0][1]:
+            candidates = [cand for cand in candidates if self.thingMatch(cand[1]["thingID"])]
+
+            if len(candidates) > 0:
+                match["thingMatch"] = True
+
+        else:
+            match["thingMatch"] = True
 
         candidates = [cand for cand in candidates if self.preConditionsMatch(cand[1]["pre_nodes"])]
 
@@ -560,13 +574,8 @@ class InteractionNode(SecondaryNode):
             "match": match, 
             "candidates": candidates
         }
-
-
-#%% System-Nodes
-class SystemActionNode(InteractionNode):
-
-    def extractConditions(self):
-        conditions = super().extractConditions()
+    
+    def _extractConditions(self):
         input = self.incomingState["payload"]
 
         if "properties" in input: # Removes the id as it is unnecesary
@@ -591,9 +600,36 @@ class SystemActionNode(InteractionNode):
                 prev = interaction.node["thingProperty"]
                 pre_nodes.append(prev)
 
-        c = [self.node["thingAction"], {"pre_nodes": pre_nodes, "conditions": self.conditions, "input": input}]
-        conditions.append(c)
+        c = {"pre_nodes": pre_nodes, "conditions": self.conditions, "input": input}
 
+        return c
+    
+    def getThingIDFromThingNode(self, thingNodeID: str):
+        if thingNodeID not in self.flow:
+            self.errors[self.node["id"]].append("Cannot find thing node with id: " + str(thingNodeID))
+            return None
+        
+        thingNode = self.flow[thingNodeID]
+
+        if "TD" not in thingNode:
+            self.errors[self.node["id"]].append(f"Thing node with id: {thingNodeID} does not have a thing.")
+            return None
+        
+        return json.loads(thingNode["TD"])["id"]
+
+
+#%% System-Nodes
+class SystemActionNode(InteractionNode):
+
+    def thingMatch(self, thingID: str) -> bool:
+        return self.node["thingID"] == thingID
+
+    def extractConditions(self):
+        conditions = super().extractConditions()
+        c = self._extractConditions()
+        if "thingID" in self.node:
+            c["thingID"] = self.node["thingID"]
+        conditions.append([self.node["thingAction"], c])
         return conditions
 
     def validatePayload(self):
@@ -639,6 +675,17 @@ class SystemActionNode(InteractionNode):
 
 class SystemPropertyNode(InteractionNode):
 
+    def thingMatch(self, thingID: str) -> bool:
+        return self.node["thingID"] == thingID
+
+    def extractConditions(self):
+        conditions = super().extractConditions()
+        c = self._extractConditions()
+        if "thingID" in self.node:
+            c["thingID"] = self.node["thingID"]
+        conditions.append([self.node["thingProperty"], c])
+        return conditions
+
     def updateState(self):
         if self.node["mode"] != "read":
             self.state = self.incomingState
@@ -681,6 +728,16 @@ class SystemPropertyNode(InteractionNode):
 
 class SystemEventServerNode(InteractionNode):
 
+    def thingMatch(self, thingID: str) -> bool:
+        return self.getThingIDFromThingNode(self.node["thing"]) == thingID
+
+    def extractConditions(self):
+        conditions = super().extractConditions()
+        c = self._extractConditions()
+        c["thingID"] = self.getThingIDFromThingNode(self.node["thing"])
+        conditions.append([self.node["eventName"], c])
+        return conditions
+
     def validatePayload(self):
         eventData = self.tds.getEventData(self.node["eventName"])
         return super()._validatePayload(eventData)
@@ -695,6 +752,17 @@ class SystemEventServerNode(InteractionNode):
         return super().match(candidates, subflow_matches)
     
 class SystemPropertyServerOutNode(InteractionNode):
+
+    def thingMatch(self, thingID: str) -> bool:
+        return self.getThingIDFromThingNode(self.node["thing"]) == thingID
+
+    def extractConditions(self):
+        conditions = super().extractConditions()
+        c = self._extractConditions()
+        c["thingID"] = self.getThingIDFromThingNode(self.triggerNode.node["thing"])
+        conditions.append([self.triggerNode.node["propertyName"]+"-out", c])
+        return conditions
+
     def validatePayload(self):
         propertyValue = self.tds.getPropertyValue(self.triggerNode.node["propertyName"])
         return super()._validatePayload(propertyValue)
@@ -709,6 +777,17 @@ class SystemPropertyServerOutNode(InteractionNode):
         return super().match(candidates, subflow_matches)
 
 class SystemActionServerOutNode(InteractionNode):
+
+    def thingMatch(self, thingID: str) -> bool:
+        return self.getThingIDFromThingNode(self.node["thing"]) == thingID
+
+    def extractConditions(self):
+        conditions = super().extractConditions()
+        c = self._extractConditions()
+        c["thingID"] = self.getThingIDFromThingNode(self.triggerNode.node["thing"])
+        conditions.append([self.triggerNode.node["actionName"]+"-out", c])
+        return conditions
+
     def validatePayload(self):
         actionData = self.tds.getActionOutput(self.triggerNode.node["actionName"])
         return super()._validatePayload(actionData)

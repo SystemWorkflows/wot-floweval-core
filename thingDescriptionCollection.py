@@ -14,9 +14,12 @@ class ThingDescriptionCollection:
             if (name in td[type]) and (id is None or td["id"] == id):
                 return td
 
-    def getActionInput(self, actionName: str) -> dict | None:
+    def getActionInput(self, actionName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if "actions" not in td:
+                continue
+
+            if id is not None and td["id"] != id:
                 continue
 
             for actName, actValue in td["actions"].items():
@@ -28,9 +31,12 @@ class ThingDescriptionCollection:
                 else:
                     return {}
 
-    def getEventData(self, eventName: str) -> dict | None:
+    def getEventData(self, eventName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if "events" not in td:
+                continue
+
+            if id is not None and td["id"] != id:
                 continue
 
             for evtName, evtValue in td["events"].items():
@@ -61,9 +67,12 @@ class ThingDescriptionCollection:
 
                 return evtValue["data"]
 
-    def getActionOutput(self, actionName: str) -> dict | None:
+    def getActionOutput(self, actionName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if "actions" not in td:
+                continue
+
+            if id is not None and td["id"] != id:
                 continue
 
             for actName, actValue in td["actions"].items():
@@ -83,9 +92,12 @@ class ThingDescriptionCollection:
         
         return None
 
-    def getPropertyValue(self, propertyName: str) -> dict | None:
+    def getPropertyValue(self, propertyName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
             if "properties" not in td:
+                continue
+
+            if id is not None and td["id"] != id:
                 continue
 
             for propName, propValue in td["properties"].items():

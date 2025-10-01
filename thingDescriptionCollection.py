@@ -1,3 +1,5 @@
+import copy
+
 class ThingDescriptionCollection:
     tds = None
 
@@ -27,7 +29,7 @@ class ThingDescriptionCollection:
                     continue
                 
                 if "input" in actValue:
-                    return actValue["input"]
+                    return copy.deepcopy(actValue["input"])
                 else:
                     return {}
 
@@ -65,7 +67,7 @@ class ThingDescriptionCollection:
                     if "enum" in property:
                         del property["enum"]
 
-                return evtValue["data"]
+                return copy.deepcopy(evtValue["data"])
 
     def getActionOutput(self, actionName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
@@ -87,8 +89,7 @@ class ThingDescriptionCollection:
 
                 if "enum" in actValue["output"]:
                     del actValue["output"]["enum"]
-
-                return actValue["output"]
+                return copy.deepcopy(actValue["output"])
         
         return None
 
@@ -110,6 +111,6 @@ class ThingDescriptionCollection:
                 if "properties" in propValue:
                     propertyReturn["properties"] = propValue["properties"]
 
-                return propertyReturn
+                return copy.deepcopy(propertyReturn)
         
         return None

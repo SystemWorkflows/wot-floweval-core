@@ -58,18 +58,26 @@ class Node:
         for nodeID in flatten(self.node["wires"]):
             state, conditions= copy.deepcopy((self.state, self.conditions))
             interactions = copy.copy(self.interactions)
+
             if nodeID not in self.flow:
                 self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(nodeID) +". Node not found in flow.")
                 continue
+
             receiverType = self.flow[nodeID]["type"]
+
             if nodeID in [c.node["id"] for c in interactions]:
                 self.errors[self.node["id"]].append("Cannot connect to node with id: " + str(nodeID) +". Loop detected.")
                 continue
+
+            if receiverType == "thing":
+                self.errors[self.node["id"]].append("Cannot connect to thing node with id: " + str(nodeID))
+                continue
+
             if receiverType == "system-event-node":
                 self.errors[self.node["id"]].append("Cannot connect to system event node with id: " + str(nodeID))
                 continue
-            child = NodeFactory.produceNode(receiverType, (self.flow[nodeID], self.flow, self.tds, state, conditions, interactions, self.triggerNode))
 
+            child = NodeFactory.produceNode(receiverType, (self.flow[nodeID], self.flow, self.tds, state, conditions, interactions, self.triggerNode))
             self.addChild(child)
             self.errors = self.errors | child.getErrors()
 
@@ -94,6 +102,19 @@ class Node:
             conditions += child.extractConditions()
 
         return conditions
+    
+    def getThingIDFromThingNode(self, thingNodeID: str):
+        if thingNodeID not in self.flow:
+            self.errors[self.node["id"]].append("Cannot find thing node with id: " + str(thingNodeID))
+            return None
+        
+        thingNode = self.flow[thingNodeID]
+
+        if "TD" not in thingNode:
+            self.errors[self.node["id"]].append(f"Thing node with id: {thingNodeID} does not have a thing.")
+            return None
+        
+        return json.loads(thingNode["TD"])["id"]
 
 #%% Secondary Nodes
 class SecondaryNode(Node):
@@ -447,6 +468,9 @@ class InteractionNode(SecondaryNode):
     def inputMatch(self, required_input: dict):
         if not self.validatePayload():
             return False
+        
+        if required_input == {} and self.incomingState["payload"] == {}:
+            return True
 
         if (required_input["type"] != "object") and (self.incomingState["payload"]["type"] != "object"):
             if "source" not in required_input:
@@ -530,6 +554,7 @@ class InteractionNode(SecondaryNode):
 
 
     def match(self, candidates: list, subflow_matches: list):
+        nodeName = candidates[0][0] # redo this
         match = {
             "thingMatch": False,
             "preConditionMatch": False, 
@@ -555,7 +580,7 @@ class InteractionNode(SecondaryNode):
 
         if len(candidates) > 0:
             match["conditionsMatch"] = True
-        
+
         candidates = [cand for cand in candidates if self.inputMatch(cand[1]["input"])]
 
         if len(candidates) > 0:
@@ -570,7 +595,7 @@ class InteractionNode(SecondaryNode):
 
         return {
             "status": status, 
-            "name": self.node["thingAction"], 
+            "name": nodeName, 
             "match": match, 
             "candidates": candidates
         }
@@ -604,18 +629,6 @@ class InteractionNode(SecondaryNode):
 
         return c
     
-    def getThingIDFromThingNode(self, thingNodeID: str):
-        if thingNodeID not in self.flow:
-            self.errors[self.node["id"]].append("Cannot find thing node with id: " + str(thingNodeID))
-            return None
-        
-        thingNode = self.flow[thingNodeID]
-
-        if "TD" not in thingNode:
-            self.errors[self.node["id"]].append(f"Thing node with id: {thingNodeID} does not have a thing.")
-            return None
-        
-        return json.loads(thingNode["TD"])["id"]
 
 
 #%% System-Nodes
@@ -633,7 +646,7 @@ class SystemActionNode(InteractionNode):
         return conditions
 
     def validatePayload(self):
-        expectedInput = self.tds.getActionInput(self.node["thingAction"])
+        expectedInput = self.tds.getActionInput(self.node["thingAction"], self.node.get("thingID", None))
         return super()._validatePayload(expectedInput)
 
     def updateState(self):
@@ -641,9 +654,9 @@ class SystemActionNode(InteractionNode):
             self.state = self.incomingState
             return
         
-        output = self.tds.getActionOutput(self.node["thingAction"])
+        output = self.tds.getActionOutput(self.node["thingAction"], self.node.get("thingID", None))
 
-        if output == None:
+        if output == {}:
             self.state["payload"] = {}
             return
         
@@ -680,10 +693,11 @@ class SystemPropertyNode(InteractionNode):
 
     def extractConditions(self):
         conditions = super().extractConditions()
-        c = self._extractConditions()
-        if "thingID" in self.node:
-            c["thingID"] = self.node["thingID"]
-        conditions.append([self.node["thingProperty"], c])
+        if self.node["mode"] == "write":
+            c = self._extractConditions()
+            if "thingID" in self.node:
+                c["thingID"] = self.node["thingID"]
+            conditions.append([self.node["thingProperty"], c])
         return conditions
 
     def updateState(self):
@@ -691,7 +705,7 @@ class SystemPropertyNode(InteractionNode):
             self.state = self.incomingState
             return
         
-        output = self.tds.getPropertyValue(self.node["thingProperty"])
+        output = self.tds.getPropertyValue(self.node["thingProperty"], self.node.get("thingID", None))
         prev = []
 
         for interaction in self.previousInteractions:
@@ -713,8 +727,8 @@ class SystemPropertyNode(InteractionNode):
     def validatePayload(self):
         if self.node["mode"] != "write":
             return True
-    
-        propertyInput = self.tds.getPropertyValue(self.node["thingProperty"])
+
+        propertyInput = self.tds.getPropertyValue(self.node["thingProperty"], self.node.get("thingID", None))
         return super()._validatePayload(propertyInput)
 
     def match(self, subflow_matches: list):
@@ -739,7 +753,7 @@ class SystemEventServerNode(InteractionNode):
         return conditions
 
     def validatePayload(self):
-        eventData = self.tds.getEventData(self.node["eventName"])
+        eventData = self.tds.getEventData(self.node["eventName"], self.getThingIDFromThingNode(self.node["thing"]))
         return super()._validatePayload(eventData)
     
     def match(self, subflow_matches: list):
@@ -754,7 +768,7 @@ class SystemEventServerNode(InteractionNode):
 class SystemPropertyServerOutNode(InteractionNode):
 
     def thingMatch(self, thingID: str) -> bool:
-        return self.getThingIDFromThingNode(self.node["thing"]) == thingID
+        return self.getThingIDFromThingNode(self.triggerNode.node["thing"]) == thingID
 
     def extractConditions(self):
         conditions = super().extractConditions()
@@ -764,14 +778,14 @@ class SystemPropertyServerOutNode(InteractionNode):
         return conditions
 
     def validatePayload(self):
-        propertyValue = self.tds.getPropertyValue(self.triggerNode.node["propertyName"])
+        propertyValue = self.tds.getPropertyValue(self.triggerNode.node["propertyName"], self.getThingIDFromThingNode(self.triggerNode.node["thing"]))
         return super()._validatePayload(propertyValue)
 
     def match(self, subflow_matches: list):
         candidates = []
 
         for subflow_match in subflow_matches:
-            if subflow_match[0] == self.node["propertyName"]:
+            if subflow_match[0] == self.triggerNode.node["propertyName"]+"-out":
                 candidates.append(subflow_match)
 
         return super().match(candidates, subflow_matches)
@@ -779,7 +793,7 @@ class SystemPropertyServerOutNode(InteractionNode):
 class SystemActionServerOutNode(InteractionNode):
 
     def thingMatch(self, thingID: str) -> bool:
-        return self.getThingIDFromThingNode(self.node["thing"]) == thingID
+        return self.getThingIDFromThingNode(self.triggerNode.node["thing"]) == thingID
 
     def extractConditions(self):
         conditions = super().extractConditions()
@@ -789,14 +803,14 @@ class SystemActionServerOutNode(InteractionNode):
         return conditions
 
     def validatePayload(self):
-        actionData = self.tds.getActionOutput(self.triggerNode.node["actionName"])
+        actionData = self.tds.getActionOutput(self.triggerNode.node["actionName"], self.getThingIDFromThingNode(self.triggerNode.node["thing"]))
         return super()._validatePayload(actionData)
     
     def match(self, subflow_matches: list):
         candidates = []
 
         for subflow_match in subflow_matches:
-            if subflow_match[0] == self.node["actionName"]:
+            if subflow_match[0] == self.triggerNode.node["actionName"]+"-out":
                 candidates.append(subflow_match)
 
         return super().match(candidates, subflow_matches)
@@ -816,7 +830,7 @@ class TriggerNode(Node):
             return True
         return False
 
-    def match(self, subflow_matches: list):
+    def match(self, subflow_matches: list) -> dict[str, Any]:
         children = self.getChildren()
         matches = {}
 
@@ -836,7 +850,7 @@ class TriggerNode(Node):
 class SystemEventNode(TriggerNode):
     
     def extractState(self):
-        eventData = self.tds.getEventData(self.node["thingEvent"])
+        eventData = self.tds.getEventData(self.node["thingEvent"], self.node.get("thingID", None))
         self.state["payload"] = eventData
         if self.state["payload"] is None:
             return
@@ -851,7 +865,7 @@ class SystemEventNode(TriggerNode):
 class SystemPropertyServerNode(TriggerNode):
 
     def extractState(self):
-        propertyValue = self.tds.getPropertyValue(self.node["propertyName"])
+        propertyValue = self.tds.getPropertyValue(self.node["propertyName"], self.getThingIDFromThingNode(self.node["thing"]))
         self.state["payload"] = propertyValue
         if self.state["payload"] is None:
             return
@@ -866,7 +880,7 @@ class SystemPropertyServerNode(TriggerNode):
 class SystemActionServerNode(TriggerNode):
 
     def extractState(self):
-        actionData = self.tds.getActionInput(self.node["actionName"])
+        actionData = self.tds.getActionInput(self.node["actionName"], self.getThingIDFromThingNode(self.node["thing"]))
         self.state["payload"] = actionData
         if self.state["payload"] is None:
             return

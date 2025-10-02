@@ -82,7 +82,7 @@ class ThingDescriptionCollection:
                     continue
 
                 if "output" not in actValue:
-                    continue
+                    return {}
 
                 if "description" in actValue["output"]:
                     del actValue["output"]["description"]

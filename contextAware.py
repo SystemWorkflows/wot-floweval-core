@@ -5,39 +5,31 @@ def inject_location_context(td: dict, context:dict) -> dict:
     return td
 
 def convert_td(td:dict, context:list, contextIndex) -> list:
+    td = copy.deepcopy(td)
+
+    if "actions" in td:
+        for action in td["actions"]:
+            if "forms" in action:
+                del action["forms"]
+
+    if "events" in td:
+        for event in td["events"]:
+            if "forms" in event:
+                del event["forms"]
+
+    if "properties" in td:
+        for prop in td["properties"]:
+            if "forms" in prop:
+                del prop["forms"]
+
     tds = []
     j = 0
-
     for i in context:
-        tds.append(copy.deepcopy(td))
-
-        if contextIndex != j:
-            tds[-1]["id"] = tds[-1]["id"] + "_" + str(j)
-
-        tds[-1] = inject_location_context(tds[-1], i)
+        contextTD = copy.deepcopy(td)
+        contextTD["id"] = contextTD["id"] + "_" + str(j)
+        contextTD = inject_location_context(contextTD, i)
+        tds.append(contextTD)
         j += 1
-    
-    for i in range(len(tds)):
-        if i == contextIndex:
-            continue
-
-        if "actions" in tds[i]:
-            for action in tds[i]["actions"]:
-                if "forms" in action:
-                    for form in action["forms"]:
-                        form["href"] = ""
-        
-        if "events" in tds[i]:
-            for event in tds[i]["events"]:
-                if "forms" in event:
-                    for form in event["forms"]:
-                        form["href"] = ""
-        
-        if "properties" in tds[i]:
-            for prop in tds[i]["properties"]:
-                if "forms" in prop:
-                    for form in prop["forms"]:
-                        form["href"] = ""
     return tds
 
 def convert_tds(tds:list, context:dict) -> list:
@@ -52,3 +44,12 @@ def convert_tds(tds:list, context:dict) -> list:
         tds_2 += convert_td(td, c, context[td["id"]]["index"])
     
     return tds_2
+
+def convert_flow(flow: list[dict], context: dict):
+    flow = copy.deepcopy(flow)
+    for node in flow:
+        if node["type"] in ["system-property-node", "system-action-node", "system-event-node"]:
+            if node["thingID"] in context:
+                node["thingID"] = node["thingID"] + "_" + str(context[node["thingID"]]["index"])
+
+    return flow

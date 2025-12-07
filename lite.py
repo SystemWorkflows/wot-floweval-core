@@ -55,7 +55,7 @@ def convert_tds_genLite(tds:list) -> list:
     return tds
 
 
-def getID(tds, type, name):
+def getID(tds: list, type: str, name: str) -> str | None:
     for td in tds:
         if (type in td) and (name in td[type]):
             return td["id"]

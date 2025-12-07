@@ -76,7 +76,7 @@ class Node:
             if receiverType == "system-event-node":
                 self.errors[self.node["id"]].append("Cannot connect to system event node with id: " + str(nodeID))
                 continue
-
+            #print(self.node["id"], state)
             child = NodeFactory.produceNode(receiverType, (self.flow[nodeID], self.flow, self.tds, state, conditions, interactions, self.triggerNode))
             self.addChild(child)
             self.errors = self.errors | child.getErrors()
@@ -113,8 +113,13 @@ class Node:
         if "TD" not in thingNode:
             self.errors[self.node["id"]].append(f"Thing node with id: {thingNodeID} does not have a thing.")
             return None
-        
-        return json.loads(thingNode["TD"])["id"]
+        try:
+            return json.loads(thingNode["TD"])["id"]
+        except Exception as e:
+            self.errors[self.node["id"]].append(f"Error parsing thing node with id: {thingNodeID}.")
+            print("Error parsing thing node: ", e)
+            print(traceback.format_exc())
+            return None
 
 #%% Secondary Nodes
 class SecondaryNode(Node):
@@ -389,13 +394,13 @@ class InteractionNode(SecondaryNode):
 
     def _validatePayload(self, expectedInput: dict):
         payload = copy.deepcopy(self.incomingState["payload"])
-
+        #print(self.incomingState)
         if payload == {} and expectedInput == {}:
             return True
 
         if (payload == {} and expectedInput != {}) or (payload != {} and expectedInput == {}):
             return False
-        
+        #print(self.node["id"])
         if payload["type"] != "object":
             if payload["type"] != expectedInput["type"]:
                 self.errors[self.node["id"]].append("Error with input! Expected: " + json.dumps(expectedInput) + ". Got: " + json.dumps(payload) + ".")
@@ -404,6 +409,9 @@ class InteractionNode(SecondaryNode):
             return True
         
         incProp = {}
+        if "properties" not in payload:
+            return False
+        
         for propertyName, propertyValue in payload["properties"].items():
             if "type" in propertyValue:
                 incProp[propertyName] = propertyValue["type"]
@@ -553,14 +561,22 @@ class InteractionNode(SecondaryNode):
         pass
 
 
-    def match(self, candidates: list, subflow_matches: list):
-        nodeName = candidates[0][0] # redo this
+    def match(self, candidates: list, subflow_matches: list, nodeName: str):
+
         match = {
             "thingMatch": False,
             "preConditionMatch": False, 
             "conditionsMatch": False, 
             "inputMatch": False
         }
+
+        if len(candidates) == 0:
+            return {
+                "status": False, 
+                "name": nodeName, 
+                "match": match, 
+                "candidates": candidates
+            }
 
         if "thingID" in candidates[0][1]:
             candidates = [cand for cand in candidates if self.thingMatch(cand[1]["thingID"])]
@@ -682,8 +698,8 @@ class SystemActionNode(InteractionNode):
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.node["thingAction"]:
                 candidates.append(subflow_match)
-
-        return super().match(candidates, subflow_matches)
+        nodeName = self.node["thingAction"]
+        return super().match(candidates, subflow_matches, nodeName)
 
 
 class SystemPropertyNode(InteractionNode):
@@ -737,8 +753,8 @@ class SystemPropertyNode(InteractionNode):
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.node["thingProperty"]:
                 candidates.append(subflow_match)
-
-        return super().match(candidates, subflow_matches)
+        nodeName = self.node["thingProperty"]
+        return super().match(candidates, subflow_matches, nodeName)
 
 class SystemEventServerNode(InteractionNode):
 
@@ -754,6 +770,7 @@ class SystemEventServerNode(InteractionNode):
 
     def validatePayload(self):
         eventData = self.tds.getEventData(self.node["eventName"], self.getThingIDFromThingNode(self.node["thing"]))
+        print("event out node: " + self.node["id"] + " " + str(eventData) + " " + str(self.incomingState))
         return super()._validatePayload(eventData)
     
     def match(self, subflow_matches: list):
@@ -762,8 +779,8 @@ class SystemEventServerNode(InteractionNode):
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.node["eventName"]:
                 candidates.append(subflow_match)
-
-        return super().match(candidates, subflow_matches)
+        nodeName = self.node["eventName"]
+        return super().match(candidates, subflow_matches, nodeName)
     
 class SystemPropertyServerOutNode(InteractionNode):
 
@@ -784,11 +801,14 @@ class SystemPropertyServerOutNode(InteractionNode):
     def match(self, subflow_matches: list):
         candidates = []
 
+        if self.triggerNode.node["type"] != "system-property-node-serv":
+            return super().match(candidates, subflow_matches, None)
+
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.triggerNode.node["propertyName"]+"-out":
                 candidates.append(subflow_match)
-
-        return super().match(candidates, subflow_matches)
+        nodeName = self.triggerNode.node["propertyName"]+"-out"
+        return super().match(candidates, subflow_matches, nodeName)
 
 class SystemActionServerOutNode(InteractionNode):
 
@@ -803,17 +823,23 @@ class SystemActionServerOutNode(InteractionNode):
         return conditions
 
     def validatePayload(self):
+        if self.triggerNode.node["type"] != "system-action-node-serv":
+            self.errors[self.node["id"]].append("System Action Node Server Out can only be used with System Action Node Serv as trigger.")
+            return False
         actionData = self.tds.getActionOutput(self.triggerNode.node["actionName"], self.getThingIDFromThingNode(self.triggerNode.node["thing"]))
         return super()._validatePayload(actionData)
     
     def match(self, subflow_matches: list):
         candidates = []
 
+        if self.triggerNode.node["type"] != "system-action-node-serv":
+            return super().match(candidates, subflow_matches, None)
+
         for subflow_match in subflow_matches:
             if subflow_match[0] == self.triggerNode.node["actionName"]+"-out":
                 candidates.append(subflow_match)
-
-        return super().match(candidates, subflow_matches)
+        nodeName = self.triggerNode.node["actionName"]+"-out"
+        return super().match(candidates, subflow_matches, nodeName)
 
 class TriggerNode(Node):
     def __init__(self, node: dict, flow: dict[str, dict], tds: ThingDescriptionCollection):

@@ -35,6 +35,7 @@ class ThingDescriptionCollection:
 
     def getEventData(self, eventName: str, id: str | None = None) -> dict | None:
         for td in self.tds:
+            #print(td)
             if "events" not in td:
                 continue
 
@@ -44,6 +45,9 @@ class ThingDescriptionCollection:
             for evtName, evtValue in td["events"].items():
                 if evtName != eventName:
                     continue
+
+                if "data" not in evtValue:
+                    return {}
 
                 if "description" in evtValue["data"]:
                     del evtValue["data"]["description"]

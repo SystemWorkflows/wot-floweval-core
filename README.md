@@ -12,7 +12,7 @@ Make a pull request. Make an issue for large changes.
 
 <a href="https://github.com/wDove1">
     <span style="display: block;">
-        <img src="https://images.weserv.nl/?url=avatars.githubusercontent.com/u/77669019?v=4&fit=cover&mask=circle&maxage=7d" style="width:8%;height:8%;vertical-align: middle;"/>
+        <img src="https://images.weserv.nl/?url=avatars.githubusercontent.com/u/69383952?v=4&fit=cover&mask=circle&maxage=7d" style="width:8%;height:8%;vertical-align: middle;"/>
         <b style="vertical-align: middle;">William Dove</b>
     </span>
 </a>

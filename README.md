@@ -3,6 +3,10 @@
 The core node evaluation system for Node-RED worflows interacting with Web Things.
 This is designed for use with [WoT-system-node](https://github.com/SystemWorkflows/WoT-system-node)
 
+### Existing Uses
+
+This repository is provided alongside WoT Do You Want?
+
 
 ## Contributing
 
@@ -25,4 +29,4 @@ Make a pull request. Make an issue for large changes.
 
 ## License
 
-See [LICENSE.md](LICENSE.md)
+See [LICENSE](LICENSE)
